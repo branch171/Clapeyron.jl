@@ -145,6 +145,7 @@ DH1 = (hV1.-hL1)./1e3
 DH2 = (hV2.-hL2)./1e3
 DH3 = (hV3.-hL3)./1e3
 
+#=
 function A_critical(model,v,T,z)
     A(x) = Clapeyron.eos(model,x,T,z)
     dA(x) = Clapeyron.Solvers.derivative(A,x)
@@ -185,10 +186,13 @@ density = zeros(N)
 for i in 1:N
     vv = vvmax + (vvmin - vvmax)*(i-1)/(N-1)
     density[i] = 1e-3/vv
+#    p = 0.0
+#    dpdV = 0.0
     p,dpdV = Clapeyron.p∂p∂V(model3,vv,Tc1,[1.])
     pcrit = X[1]*vc1/vv^2 + 2.0*X[2]*vc1^2/vv^3 + 3.0*X[3]*vc1^3/vv^4
     pressure[i] = (p+pcrit)/1e5
 end
+=#
 
 p1 = plot([rhov1,rhol1,rhov2,rhol2,rhov3,rhol3], [psat1,psat1,psat2,psat2,psat3,psat3], xlabel = "rho [kmol/m3]", ylabel = "p [bara]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,size=(1600,1200))
 display(p1)
@@ -203,6 +207,10 @@ X = zeros(3)
 X = Clapeyron.update_critical_params(model3)
 
 println("SAFTVRMieCP X = $(X)")
+
+Zc = Clapeyron.Z_base(model3,vc1,Tc1,[1.])
+
+println("GERG2008 Zc = $(Zc)")
 
 T1    = LinRange(Tc1, Tc1*3.0,  N)
 T1C   = zeros(N)

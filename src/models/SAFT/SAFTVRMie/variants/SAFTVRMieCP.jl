@@ -204,6 +204,16 @@ function a_res_base(model ::SAFTVRMieCPModel, V, T, z)
     return @f(a_hs,_data) + @f(a_dispchain,_data) + @f(a_assoc,_data)
 end
 
+function Z_base(model ::SAFTVRMieCPModel, V, T, z) 
+    ares(x)  = a_res_base(model, x, T, z)
+    dares(x) = Solvers.derivative(ares,x) 
+    return 1.0 - V*dares(V)
+end
+
+function a_Kiselev(model ::SAFTVRMieCPModel, V, T, z) 
+    return 1.0
+end
+
 function update_critical_params(model ::SAFTVRMieCPModel)
     Vcrit,pcrit,Tcrit = model.params.Vcrit,model.params.pcrit,model.params.Tcrit
     calc_critical_params = true
@@ -225,17 +235,12 @@ function update_critical_params(model ::SAFTVRMieCPModel)
         A[3,1] =  6.0*Vc/Vc^4
         A[3,2] =  24.0*Vc^2/Vc^5
         A[3,3] =  60.0*Vc^3/Vc^6
-        println("SAFTVRMieCP A = $(A)")
         B = zeros(3)
         X = zeros(3)
         pc0, ∂p0_∂V, ∂²p0_∂V² = da(Vc), d2a(Vc), d3a(Vc)
-        println("SAFTVRMieCP pc0 = $(pc0)")#
-        println("SAFTVRMieCP ∂p0_∂V = $(∂p0_∂V)")
-        println("SAFTVRMieCP ∂²p0_∂V² = $(∂²p0_∂V²)")
         B[1] =  pc - pc0
         B[2] = -∂p0_∂V
         B[3] = -∂²p0_∂V²
-        println("SAFTVRMieCP B = $(B)")
         X = A \ B
     end
     return X
