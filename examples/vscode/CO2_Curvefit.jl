@@ -1,39 +1,33 @@
 using Clapeyron, NLsolve, Plots
 
 model1 = GERG2008(["carbon dioxide"])
-model2 = SAFTVRMie(["carbon dioxide"];idealmodel=AlyLeeIdeal)
-model3 = SAFTVRMieCP(["carbon dioxide"];idealmodel=AlyLeeIdeal)
 
 (Tc1, pc1, vc1) = crit_pure(model1)
 println("GERG2008 Tc, pc, rhoc = $(Tc1), $(pc1), $(vc1)")
-(Tc2, pc2, vc2) = crit_pure(model2)
-println("SAFTVRMie Tc, pc, rhoc = $(Tc2), $(pc2), $(vc2)")
-(Tc3, pc3, vc3) = crit_pure(model3)
-println("SAFTVRMieCP Tc, pc, rhoc = $(Tc3), $(pc3), $(vc3)")
 
-N    = 51
-Ts1  = 0.75
-Te1  = 0.998
+N    = 21
+Ts1  = 0.72
+Te1  = 0.99
 
 println("Tstart = $(Ts1*Tc1-273.15)")
 println("Tend = $(Te1*Tc1-273.15)")
 
 T1    = zeros(N)
-for i = 1:51
-    T1[i] = Ts1*Tc1 + (Te1*Tc1 - Ts1*Tc1)*((i-1)/(N-1))^(1.0/3.0)
+for i = 1:N
+    T1[i] = Ts1*Tc1 + (Te1*Tc1 - Ts1*Tc1)*((i-1)/(N-1))
 end
 
 psat1  = zeros(N)
-vl1     = zeros(N)
-vv1     = zeros(N)
-rhol1   = zeros(N)
-rhov1   = zeros(N)
+vl1    = zeros(N)
+vv1    = zeros(N)
+rhol1  = zeros(N)
+rhov1  = zeros(N)
 hL1    = zeros(N)
 hV1    = zeros(N)
 cpL1   = zeros(N)
 cpV1   = zeros(N)
-aL1   = zeros(N)
-aV1   = zeros(N)
+aL1    = zeros(N)
+aV1    = zeros(N)
 
 v0 = [0.0,0.0]
 
@@ -51,16 +45,28 @@ for i in 1:N
         vv1[i] = sat[3]
         global v0 = [vl1[i],vv1[i]]
     end
-    rhol1[i] = 1e-3/vl1[i]
-    rhov1[i] = 1e-3/vv1[i]
+    rhol1[i] = 1/vl1[i]
+    rhov1[i] = 1/vv1[i]
     hL1[i]   = Clapeyron.VT_enthalpy(model1,vl1[i],T1[i],[1.])
     hV1[i]   = Clapeyron.VT_enthalpy(model1,vv1[i],T1[i],[1.])
     cpL1[i]  = Clapeyron.VT_isobaric_heat_capacity(model1,vl1[i],T1[i],[1.])
     cpV1[i]  = Clapeyron.VT_isobaric_heat_capacity(model1,vv1[i],T1[i],[1.])
     aL1[i]   = Clapeyron.VT_speed_of_sound(model1,vl1[i],T1[i],[1.])
     aV1[i]   = Clapeyron.VT_speed_of_sound(model1,vv1[i],T1[i],[1.])
- #   println("$(T1[i]), $(psat1[i]), $(rhov1[i]), $(rhol1[i]), $(aV1[i]), $(aL1[i])")
-    println("$(T1[i]), $(psat1[i]), $(rhol1[i])")
+#    println("$(T1[i]), $(psat1[i]), $(rhov1[i]), $(rhol1[i])")
+end
+
+println("press")
+for i in 1:N
+    println("$(T1[i]),$(psat1[i])")
+end
+println("rho liq")
+for i in 1:N
+    println("$(T1[i]),$(rhol1[i])")
+end
+println("rho vap")
+for i in 1:N
+    println("$(T1[i]),$(rhov1[i])")
 end
 
 T1C = T1 .- 273.15
