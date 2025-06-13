@@ -1,5 +1,9 @@
-struct SAFTVRMieKiselevParam{T} <: ParametricEoSParam{T}
+struct SAFTVRMieVTCParam{T} <: ParametricEoSParam{T}
     Mw::SingleParam{T}
+    Vc::SingleParam{T}
+    ac::SingleParam{T}
+    bc::SingleParam{T}
+    cc::SingleParam{T}
     Vt::SingleParam{T}
     segment::SingleParam{T}
     sigma::PairParam{T}
@@ -10,16 +14,19 @@ struct SAFTVRMieKiselevParam{T} <: ParametricEoSParam{T}
     bondvol::AssocParam{T} 
 end
 
-function SAFTVRMieKiselevParam(Mw,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
-    return build_parametric_param(SAFTVRMieKiselevParam,Mw,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
+function SAFTVRMieVTCParam(Mw,Vc,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
+    return build_parametric_param(SAFTVRMieVTCParam,Mw,Vc,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
 end
 
-abstract type SAFTVRMieKiselevModel <: SAFTVRMieModel end
-@newmodel SAFTVRMieKiselev SAFTVRMieKiselevModel SAFTVRMieKiselevParam{T}
-default_references(::Type{SAFTVRMieKiselev}) = ["10.1063/1.4819786", "10.1080/00268976.2015.1029027"]
-default_locations(::Type{SAFTVRMieKiselev}) = ["SAFT/SAFTVRMie/SAFTVRMieKiselev", "properties/molarmass.csv"]
+abstract type SAFTVRMieVTCModel <: SAFTVRMieModel end
+@newmodel SAFTVRMieVTC SAFTVRMieVTCModel SAFTVRMieVTCParam{T}
+default_references(::Type{SAFTVRMieVTC}) = ["10.1063/1.4819786", "10.1080/00268976.2015.1029027"]
+default_locations(::Type{SAFTVRMieVTC}) = ["SAFT/SAFTVRMie/SAFTVRMieVTC", "properties/molarmass.csv"]
 
-function transform_params(::Type{SAFTVRMieKiselev},params,components)
+function transform_params(::Type{SAFTVRMieVTC},params,components)
+    Vc = params["Vc"]
+    Vc.values .*= 1E-6
+    params["Vc"] = Vc
     Vt = params["Vt"]
     Vt.values .*= 1E-6
     params["Vt"] = Vt
@@ -37,7 +44,7 @@ function transform_params(::Type{SAFTVRMieKiselev},params,components)
 end
 
 """
-    SAFTVRMieKiselevModel <: SAFTVRMieModel
+    SAFTVRMieVTCModel <: SAFTVRMieModel
 
     SAFTVRMie(components;
     idealmodel = BasicIdeal,
@@ -81,23 +88,23 @@ SAFT-VR with Mie potential and the Mie association kernel
 1. Lafitte, T., Apostolakou, A., Avendaño, C., Galindo, A., Adjiman, C. S., Müller, E. A., & Jackson, G. (2013). Accurate statistical associating fluid theory for chain molecules formed from Mie segments. The Journal of Chemical Physics, 139(15), 154504. [doi:10.1063/1.4819786](https://doi.org/10.1063/1.4819786)
 2. Dufal, S., Lafitte, T., Haslam, A. J., Galindo, A., Clark, G. N. I., Vega, C., & Jackson, G. (2015). The A in SAFT: developing the contribution of association to the Helmholtz free energy within a Wertheim TPT1 treatment of generic Mie fluids. Molecular Physics, 113(9–10), 948–984. [doi:10.1080/00268976.2015.1029027](https://doi.org/10.1080/00268976.2015.1029027)
 """
-SAFTVRMieKiselev
+SAFTVRMieVTC
 
-export SAFTVRMieKiselev
+export SAFTVRMieVTC
 
-function x0_volume_liquid(model::SAFTVRMieKiselevModel,T,z)
+function x0_volume_liquid(model::SAFTVRMieVTCModel,T,z)
     v_lb = lb_volume(model,z)
     return v_lb*1.7
 end
 
-function I(model::SAFTVRMieKiselevModel, V, T, z,i, j,_data = @f(data))
+function I(model::SAFTVRMieVTCModel, V, T, z,i, j,_data = @f(data))
     _d,ρS,ζi,_ζ_X,_ζst,σ3_x = _data
     ϵ = model.params.epsilon.values[i,j]
     Tr = T/ϵ
     λr = model.params.lambda_r.values[i,j]
     res = zero(_ζst)
     ρr = ρS*σ3_x
-    b = SAFTVRMieKiselevconsts.b
+    b = SAFTVRMieVTCconsts.b
     rhostar_to_i = one(res)
     @inbounds for i = 0:10
         Tstar_to_j = one(res)
@@ -117,7 +124,7 @@ function I(model::SAFTVRMieKiselevModel, V, T, z,i, j,_data = @f(data))
     return res
 end
 
-const SAFTVRMieKiselevconsts = (
+const SAFTVRMieVTCconsts = (
    b = [[0.0132970702182068	-0.0177199122935443	0.0293736747694974	-0.0205527304404423	0.00861683420907605	-0.00228505275303600	0.000390171133200072	-4.26035888869942e-05	2.86246920519487e-06	-1.07315320963937e-07	1.70912976772329e-09
         -0.0465504528847432	0.332597325549352	-0.326575316241193	0.144653671541451	-0.0363193315289496	0.00569934220115537	-0.000581966173216051	3.83608167089024e-05	-1.50305409953983e-06	2.66749257811143e-08	0
         0.164972499633366	-0.974898725377830	0.919082550772666	-0.367978443660284	0.0788054156983951	-0.00981102799831725	0.000717901835772044	-2.91191052989125e-05	5.17207032026779e-07	0	0
@@ -198,79 +205,41 @@ const SAFTVRMieKiselevconsts = (
 )
 
 # base a_res without critical correction
-function a_res_base(model ::SAFTVRMieKiselevModel, V, T, z, _data=@f(data))
+function a_res_base(model ::SAFTVRMieVTCModel, V, T, z, _data=@f(data))
     return @f(a_hs,_data) + @f(a_dispchain,_data) + @f(a_assoc,_data)
 end
 
-function Z_base(model ::SAFTVRMieKiselevModel, V, T, z) 
+function Z_base(model ::SAFTVRMieVTCModel, V, T, z) 
     ares(x)  = a_res_base(model, x, T, z)
     dares(x) = Solvers.derivative(ares,x) 
     return 1.0 - V*dares(V)
 end
 
 # Critical point correction term
-function a_crit(model ::SAFTVRMieKiselevModel, V, T, z, _data=@f(data))
+function a_crit(model ::SAFTVRMieVTCModel, V, T, z, _data=@f(data))
     ∑z = sum(z)
-    #=
     Vc = model.params.Vc.values
     ac = model.params.ac.values
     bc = model.params.bc.values
     cc = model.params.cc.values
-    _Vc = zero(T+V+first(z))
     _ac = zero(T+V+first(z))
     _bc = zero(T+V+first(z))
     _cc = zero(T+V+first(z))
     for i ∈ @comps
         zᵢ,Vcᵢ,acᵢ,bcᵢ,ccᵢ = z[i],Vc[i],ac[i],bc[i],cc[i]
-        _Vc += zᵢ*Vcᵢ
-        _ac += zᵢ*acᵢ
-        _bc += zᵢ*bcᵢ
-        _cc += zᵢ*ccᵢ
+        _ac += zᵢ*acᵢ*Vcᵢ
+        _bc += zᵢ*bcᵢ*Vcᵢ*Vcᵢ
+        _cc += zᵢ*ccᵢ*Vcᵢ*Vcᵢ*Vcᵢ
     end
-    _Vc /= ∑z
     _ac /= ∑z
     _bc /= ∑z
     _cc /= ∑z
-    =#
-    # this code calculate ac,bc,cc on the fly. Its very expensive and once we have ac,bc,cc 
-    # we should simply set these in the params 
-    Tc = 304.1282
-    pc = 7.3773e6
-    Vc = 9.41178357551188e-5
-    #=
-    Ac(x) = (Clapeyron.a_resVT(model,x,Tc,[1.]) - log(x))*(Clapeyron.R̄*Tc)
-    dAc(x) = Clapeyron.Solvers.derivative(Ac,x)
-    d2Ac(x) = Clapeyron.Solvers.derivative(dAc,x)
-    d3Ac(x) = Clapeyron.Solvers.derivative(d2Ac,x)
-    pcr, ∂pcr_∂V, ∂²pcr_∂V² = -dAc(Vc),-d2Ac(Vc),-d3Ac(Vc)
-    A = zeros(3,3)
-    A[1,1] =  1.0/pc*Vc/Vc^2
-    A[1,2] =  2.0/pc*Vc^2/Vc^3
-    A[1,3] =  3.0/pc*Vc^3/Vc^4
-    A[2,1] = -2.0/pc*Vc/Vc^3
-    A[2,2] = -6.0/pc*Vc^2/Vc^4
-    A[2,3] = -12.0/pc*Vc^3/Vc^5
-    A[3,1] =  6.0/pc*Vc/Vc^4
-    A[3,2] =  24.0/pc*Vc^2/Vc^5
-    A[3,3] =  60.0/pc*Vc^3/Vc^6
-    B = zeros(3)
-    B[1] =  (pc - pcr)/pc
-    B[2] = -∂pcr_∂V/pc
-    B[3] = -∂²pcr_∂V²/pc
-    X = A \ B
-    =#
-    X  = [-28.498001943712474, 167.96845818970314, -8.053446842593592]
-    ac = X[1]*Vc
-    bc = X[2]*Vc*Vc
-    cc = X[3]*Vc*Vc*Vc
- #   rhoc = 1.0/Vc
     rho = ∑z/V
- #   delta = rho/rhoc
-     _a_crit = (ac*(rho) + bc*(rho)^2 + cc*(rho)^3)/(R̄*T)
+     _a_crit = (_ac*(rho) + _bc*(rho)^2 + _cc*(rho)^3)/(R̄*T)
     return _a_crit
 end
 
-function a_resVT(model ::SAFTVRMieKiselevModel, V, T, z, _data = @f(data))
+function a_resVT(model ::SAFTVRMieVTCModel, V, T, z, _data = @f(data))
     Vt = model.params.Vt.values
     _Vt = zero(T+V+first(z))
     for i ∈ @comps
@@ -282,7 +251,7 @@ function a_resVT(model ::SAFTVRMieKiselevModel, V, T, z, _data = @f(data))
     return _a_resVT
 end
 
-function a_res(model ::SAFTVRMieKiselevModel, V, T, z, _data = @f(data))
+function a_res(model ::SAFTVRMieVTCModel, V, T, z, _data = @f(data))
     _a_res = a_resVT(model, V, T, z, _data) + a_crit(model, V, T, z, _data)
     return _a_res
 end

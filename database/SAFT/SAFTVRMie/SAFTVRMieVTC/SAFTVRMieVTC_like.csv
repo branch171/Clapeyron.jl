@@ -1,0 +1,4 @@
+Clapeyron Database File,,,,,,,,,,
+SAFTVRMie Like Parameters,,,,,,,,,,
+species,DIPPR Number,Mw,Vc,ac,bc,cc,Vt,segment,sigma,epsilon,lambda_r,lambda_a,n_H,n_e,source
+carbon dioxide,,44.01,94.1178357551188,-28.498001943712474,167.96845818970314,-8.053446842593592,0.8647110562846486,1.4266567518944193,3.217122368979087,324.5863173770914,11.216471208640952,9.261645242710252,1.0,0.0,10.1016/j.fluid.2015.12.044
