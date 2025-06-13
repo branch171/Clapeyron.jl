@@ -208,25 +208,6 @@ function Z_base(model ::SAFTVRMieKiselevModel, V, T, z)
     return 1.0 - V*dares(V)
 end
 
-function Z_crit(model ::SAFTVRMieKiselevModel, V, T, z) 
-    ares(x)  = a_res_crit(model, x, T, z)
-    dares(x) = Solvers.derivative(ares,x) 
-    return 1.0 - V*dares(V)
-end
-
-function update_critical_params(model ::SAFTVRMieKiselevModel)
-    Vc = model.params.Vc.values[1]
-    pc = model.params.pc.values[1]
-    Tc = model.params.Tc.values[1]
-    a(x)   = R̄*Tc*(log(x) - a_res_base(model, x, Tc, [1.])) 
-    da(x)  = Solvers.derivative(a,x)
-    A =  1.0*Vc/Vc^2
-    pc0 = da(Vc)
-    B =  pc - pc0
-    X = B/ A
-    return X
-end
-
 # Critical point correction term
 function a_crit(model ::SAFTVRMieKiselevModel, V, T, z, _data=@f(data))
     ∑z = sum(z)
@@ -289,60 +270,6 @@ function a_crit(model ::SAFTVRMieKiselevModel, V, T, z, _data=@f(data))
     return _a_crit
 end
 
-function a_res_crit(model ::SAFTVRMieKiselevModel, V, T, z) 
-    _data = @f(data)
-    betac0 = 0.325
-    gammac0 = 1.24
-    deltac0 = 8.5
-    Dc0 = 0.51
-    bc0 = 1.359
-    mc0 = 1.336
-    a20 = 7.22
-    a21 = -3.57
-    alphac0 = 2.0 - gammac0 - 2.0*betac0
-    Vc = model.params.Vc.values
-    Vc0 = model.params.Vc0.values
-    Tc = model.params.Tc.values
-    Tc0 = model.params.Tc0.values
-    dc0 = model.params.dc0.values
-    vc0 = model.params.vc0.values
-    Gi = model.params.Gi.values
-    _Vc = zero(T+V+first(z))
-    _Vc0 = zero(T+V+first(z))
-    _Tc = zero(T+V+first(z))
-    _Tc0 = zero(T+V+first(z))
-    _dc0 = zero(T+V+first(z))
-    _vc0 = zero(T+V+first(z))
-    invGi = zero(T+V+first(z))
-    for i ∈ @comps
-        zᵢ,Vcᵢ,Vc0ᵢ,Tcᵢ,Tc0ᵢ,dc0ᵢ,vc0ᵢ,Giᵢ = z[i],Vc[i],Vc0[i],Tc[i],Tc0[i],dc0[i],vc0[i],Gi[i]
-       _Vc += zᵢ*Vcᵢ
-       _Vc0 += zᵢ*Vc0ᵢ
-       _Tc += zᵢ*Tcᵢ
-       _Tc0 += zᵢ*Tc0ᵢ
-       _dc0 += zᵢ*dc0ᵢ
-       _vc0 += zᵢ*vc0ᵢ
-       invGi += zᵢ/Giᵢ
-    end
-    _Gi = 1.0/invGi
-    tauc0 = T/_Tc - 1.0
-    netac0 = V/_Vc  - 1.0
-    phi =  netac0*(1.0 + _vc0*netac0^2*exp(-deltac0*netac0)) + _dc0*tauc0*(1.0 - 2.0*tauc0)
-    q1 = 3.0*(sqrt(4.0/3.0)*bc0*abs(phi)/mc0)^(1.0/betac0) + 2.0*tauc0
-    q = (q1 + sqrt(q1*q1 + 12.0*tauc0*tauc0))/6.0/_Gi
-    Y = (q+q*q)/(1.0+q+q*q)
-    tauY20 = 0.0
-    if Y > 0.0
-        tauY20 = Y^(-alphac0)
-    end
-    tauY21 = 0.0
-    if Y > 0.0
-        tauY21 = Y^(-(alphac0-Dc0))
-    end
-    _a_crit = tauc0^2/(2.0*(1.0+tauc0^2))*(a20*(tauY20 - 1.0) + a21*(tauY21 - 1.0))
-    return @f(a_hs,_data) + @f(a_dispchain,_data) + @f(a_assoc,_data) + @f(a_crit,_data) - _a_crit
-end
-
 function a_resVT(model ::SAFTVRMieKiselevModel, V, T, z, _data = @f(data))
     Vt = model.params.Vt.values
     _Vt = zero(T+V+first(z))
@@ -356,71 +283,6 @@ function a_resVT(model ::SAFTVRMieKiselevModel, V, T, z, _data = @f(data))
 end
 
 function a_res(model ::SAFTVRMieKiselevModel, V, T, z, _data = @f(data))
-    #= 
-    betac0 = 0.325
-    gammac0 = 1.24
-    deltac0 = 8.5
-    Dc0 = 0.51
-    bc0 = 1.359
-    mc0 = 1.336
-    alphac0 = 2.0 - gammac0 - 2.0*betac0
-    Vc = model.params.Vc.values
-    Vc0 = model.params.Vc0.values
-    Tc = model.params.Tc.values
-    Tc0 = model.params.Tc0.values
-    dc0 = model.params.dc0.values
-    vc0 = model.params.vc0.values
-    Gi = model.params.Gi.values
-    _Vc = zero(T+V+first(z))
-    _Vc0 = zero(T+V+first(z))
-    _Tc = zero(T+V+first(z))
-    _Tc0 = zero(T+V+first(z))
-    _dc0 = zero(T+V+first(z))
-    _vc0 = zero(T+V+first(z))
-    invGi = zero(T+V+first(z))
-    for i ∈ @comps
-        zᵢ,Vcᵢ,Vc0ᵢ,Tcᵢ,Tc0ᵢ,dc0ᵢ,vc0ᵢ,Giᵢ = z[i],Vc[i],Vc0[i],Tc[i],Tc0[i],dc0[i],vc0[i],Gi[i]
-       _Vc += zᵢ*Vcᵢ
-       _Vc0 += zᵢ*Vc0ᵢ
-       _Tc += zᵢ*Tcᵢ
-       _Tc0 += zᵢ*Tc0ᵢ
-       _dc0 += zᵢ*dc0ᵢ
-       _vc0 += zᵢ*vc0ᵢ
-       invGi += zᵢ/Giᵢ
-    end
-    _Gi = 1.0/invGi
-    tauc0 = T/_Tc - 1.0
-    Dtauc0 = _Tc/_Tc0 - 1.0
-    netac0 = V/_Vc  - 1.0
-    Dneta0 = _Vc/_Vc0 - 1.0
-    phi =  netac0*(1.0 + _vc0*netac0^2*exp(-deltac0*netac0)) + _dc0*tauc0*(1.0 - 2.0*tauc0)
-    q1 = 3.0*(sqrt(4.0/3.0)*bc0*abs(phi)/mc0)^(1.0/betac0) + 2.0*tauc0
-    q = (q1 + sqrt(q1*q1 + 12.0*tauc0*tauc0))/6.0/_Gi
-    Y = (q+q*q)/(1.0+q+q*q)
-    tauY = 0.0
-    if Y > 0.0
-        tauY = tauc0*Y^(-alphac0/2.0)
-    end
-    taum = tauY + (1.0 + tauc0)*Dtauc0*Y^(2.0*(2.0 - alphac0)/3.0)
-    Tm = _Tc0*(taum + 1.0)
-    netam = netac0*Y^((gammac0 - 2.0*betac0)/4.0) + (1.0 + netac0)*Dneta0*Y^((2.0 - alphac0)/2.0)
-    Vm = _Vc0*(netam + 1.0)
-    DV = V/_Vc0 - 1.0
-    _a_res = a_res_crit(model, Vm, Tm, z) - a_res_crit(model, _Vc0, Tm, z) + a_res_crit(model, _Vc0, T, z) + netam*Z_crit(model, _Vc0, Tm, z) - DV*Z_crit(model, _Vc0, T, z) + log((DV + 1.0)/(netam + 1.0))
-#    _a_res = a_res_crit(model, V, T, z)
-=#
-#    _data = @f(data)
-#    ∑z = sum(z)
-#=
-    Vt = model.params.Vt.values
-    _Vt = zero(T+V+first(z))
-    for i ∈ @comps
-        zᵢ,Vtᵢ = z[i],Vt[i]
-        _Vt += zᵢ*Vtᵢ
-    end
-    Veos = V + _Vt
-    _a_res = a_res_base(model, Veos, T, z, _data) + a_crit(model, V, T, z, _data)
-    =#
     _a_res = a_resVT(model, V, T, z, _data) + a_crit(model, V, T, z, _data)
     return _a_res
 end
