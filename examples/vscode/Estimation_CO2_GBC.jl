@@ -1,6 +1,6 @@
 using Clapeyron,NLsolve
 
-model = SAFTVRMieKiselev(["carbon dioxide"]);
+model = SAFTVRMieVTC_param(["carbon dioxide"]);
 
 Tc = 304.1282
 pc = 7.3773e6

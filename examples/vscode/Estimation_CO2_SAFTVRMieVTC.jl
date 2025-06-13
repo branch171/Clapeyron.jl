@@ -2,7 +2,7 @@ using Clapeyron, Metaheuristics
 
 method = ECA(;options=Options(iterations=50));
 
-model = SAFTVRMieKiselev(["carbon dioxide"]);
+model = SAFTVRMieVTC_param(["carbon dioxide"]);
 
 epsilon0, sigma0, Vt0, segment0, lambda_r0, lambda_a0 = 324.5863173770914, 3.217122368979087, 0.8647110562846486, 1.4266567518944193, 11.216471208640952, 9.261645242710252
 
