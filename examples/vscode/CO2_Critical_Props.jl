@@ -11,9 +11,9 @@ println("SAFTVRMie Tc, pc, vc = $(Tc2), $(pc2), $(vc2)")
 (Tc3, pc3, vc3) = crit_pure(model3)
 println("SAFTVRMieKiselev Tc, pc, vc = $(Tc3), $(pc3), $(vc3)")
 
-N    = 51
+N    = 201
 Tcs  = 0.72
-Tce  = 0.99
+Tce  = 0.99995
 
 T1    = zeros(N)
 for i = 1:N
@@ -23,15 +23,15 @@ T1C   = zeros(N)
 psat1 = zeros(N)
 vl1   = zeros(N)
 vv1   = zeros(N)
-rhol1   = zeros(N)
-rhov1   = zeros(N)
+rhol1 = zeros(N)
+rhov1 = zeros(N)
 
 hL1   = zeros(N)
 hV1   = zeros(N)
 cpL1  = zeros(N)
 cpV1  = zeros(N)
-aL1  = zeros(N)
-aV1  = zeros(N)
+aL1   = zeros(N)
+aV1   = zeros(N)
 
 v0 = [0.0,0.0]
 
@@ -235,17 +235,49 @@ end
 #println("pressure = $(pressure)")
 #println("density = $(density)")
 
-p1 = plot([rhov1,rhol1,rhov3,rhol3], [psat1,psat1,psat3,psat3], xlabel = "rho [kmol/m3]", ylabel = "p [bara]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,size=(1600,1200))
+p1 = plot([rhov1,rhol1,rhov3,rhol3], [psat1,psat1,psat3,psat3],
+label=["GERG2008" "GERG2008" "SAFTVRMieVTC" "SAFTVRMieVTC"], 
+xlabel = "rho [kmol/m3]", 
+ylabel = "p [bara]",
+left_margin = 10Plots.mm,
+bottom_margin = 10Plots.mm,
+grid = :on,
+xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+linewidth=3,size=(1600,1200))
 display(p1)
-
-#p1 = plot([rhov1,rhol1,rhov2,rhol2,rhov3,rhol3], [psat1,psat1,psat2,psat2,psat3,psat3], xlabel = "rho [kmol/m3]", ylabel = "p [bara]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,size=(1600,1200))
-#display(p1)
-
-#p2 = plot([T1C,T1C,T2C,T2C,T3C,T3C], [cpV1,cpL1,cpV2,cpL2,cpV3,cpL3], xlabel = "Temperature [deg C]", ylabel = "Cp [j/mol]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,size=(1600,1200))
-#display(p2)
-
-p3 = plot([T1C,T1C,T2C,T2C,T3C,T3C], [aV1,aL1,aV2,aL2,aV3,aL3], xlabel = "Temperature [deg C]", ylabel = "a [m/s]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,size=(1600,1200))
+#=
+p2 = plot([T1C,T1C,T2C,T2C,T3C,T3C], [cpV1,cpL1,cpV2,cpL2,cpV3,cpL3],
+label=["GERG2008" "GERG2008" "SAFTVRMie" "SAFTVRMie" "SAFTVRMieVTC" "SAFTVRMieVTC"], 
+xlabel = "Temperature [deg C]", 
+ylabel = "Cp [J/mol/K]",
+left_margin = 10Plots.mm,
+bottom_margin = 10Plots.mm,
+grid = :on,
+xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+linewidth=3,size=(1600,1200))
+display(p2)
+=#
+p3 = plot([T1C,T1C,T2C,T2C,T3C,T3C], [aV1,aL1,aV2,aL2,aV3,aL3],
+label=["GERG2008" "GERG2008" "SAFTVRMie" "SAFTVRMie" "SAFTVRMieVTC" "SAFTVRMieVTC"], 
+xlabel = "Temperature [deg C]", 
+ylabel = "a [m/s]",
+left_margin = 10Plots.mm,
+bottom_margin = 10Plots.mm,
+grid = :on,
+xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+linewidth=3,size=(1600,1200))
 display(p3)
+
+p4 = plot([T1C,T2C,T3C], [DH1,DH2,DH3],
+label=["GERG2008" "SAFTVRMie" "SAFTVRMieVTC"], 
+xlabel = "Temperature [deg C]", 
+ylabel = "DH [kJ/mol]",
+left_margin = 10Plots.mm,
+bottom_margin = 10Plots.mm,
+grid = :on,
+xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+linewidth=3,size=(1600,1200))
+display(p4)
 
 #ac0 = Clapeyron.update_critical_params(model3)
 

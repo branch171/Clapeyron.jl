@@ -1,47 +1,49 @@
 using Clapeyron, Metaheuristics
 
-method = ECA(;options=Options(iterations=400));
+method = ECA(;options=Options(iterations=50));
 
 model = SAFTVRMieKiselev(["carbon dioxide"]);
+
+epsilon0, sigma0, Vt0, segment0, lambda_r0, lambda_a0 = 324.5863173770914, 3.217122368979087, 0.8647110562846486, 1.4266567518944193, 11.216471208640952, 9.261645242710252
 
 toestimate = [
     Dict(
         :param => :epsilon,
-        :lower => 150.,
-        :upper => 300.,
-        :guess => 250.
+        :lower => epsilon0*0.8,
+        :upper => epsilon0*1.2,
+        :guess => epsilon0
     ),
     Dict(
         :param => :sigma,
         :factor => 1e-10,
-        :lower => 3.,
-        :upper => 3.5,
-        :guess => 3.2
+        :lower => sigma0*0.8,
+        :upper => sigma0*1.2,
+        :guess => sigma0
     ),
     Dict(
         :param => :Vt,
         :factor => 1e-6,
-        :lower => 0.9,
-        :upper => 1.20,
-        :guess => 1.05,
+        :lower => Vt0*0.8,
+        :upper => Vt0*1.2,
+        :guess => Vt0
     ),
     Dict(
         :param => :segment,
-        :lower => 1.4,
-        :upper => 2.0,
-        :guess => 1.6
+        :lower => segment0*0.8,
+        :upper => segment0*1.2,
+        :guess => segment0
     ),
     Dict(
         :param => :lambda_r,
-        :lower => 20.,
-        :upper => 30.,
-        :guess => 25.
+        :lower => lambda_r0*0.8,
+        :upper => lambda_r0*1.2,
+        :guess => lambda_r0
     ),
     Dict(
         :param => :lambda_a,
-        :lower => 5.,
-        :upper => 6.,
-        :guess => 5.5
+        :lower => lambda_a0*0.8,
+        :upper => lambda_a0*1.2,
+        :guess => lambda_a0
     )
 ];
 

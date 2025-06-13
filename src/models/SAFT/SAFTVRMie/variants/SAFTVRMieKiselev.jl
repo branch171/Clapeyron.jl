@@ -198,7 +198,7 @@ const SAFTVRMieKiselevconsts = (
 )
 
 # base a_res without critical correction
-function a_res_base(model ::SAFTVRMieKiselevModel, V, T, z, _data=@f(data)) 
+function a_res_base(model ::SAFTVRMieKiselevModel, V, T, z, _data=@f(data))
     return @f(a_hs,_data) + @f(a_dispchain,_data) + @f(a_assoc,_data)
 end
 
@@ -229,15 +229,63 @@ end
 
 # Critical point correction term
 function a_crit(model ::SAFTVRMieKiselevModel, V, T, z, _data=@f(data))
-    Vc = model.params.Vc.values
-    ac0 = model.params.ac0.values
     ∑z = sum(z)
-    _a_crit = zero(T+V+first(z))
+    #=
+    Vc = model.params.Vc.values
+    ac = model.params.ac.values
+    bc = model.params.bc.values
+    cc = model.params.cc.values
+    _Vc = zero(T+V+first(z))
+    _ac = zero(T+V+first(z))
+    _bc = zero(T+V+first(z))
+    _cc = zero(T+V+first(z))
     for i ∈ @comps
-        zᵢ,Vcᵢ,ac0ᵢ = z[i],Vc[i],ac0[i]
-       _a_crit += zᵢ*(ac0ᵢ/(V/Vcᵢ))
+        zᵢ,Vcᵢ,acᵢ,bcᵢ,ccᵢ = z[i],Vc[i],ac[i],bc[i],cc[i]
+        _Vc += zᵢ*Vcᵢ
+        _ac += zᵢ*acᵢ
+        _bc += zᵢ*bcᵢ
+        _cc += zᵢ*ccᵢ
     end
-     _a_crit /= R̄*T*∑z
+    _Vc /= ∑z
+    _ac /= ∑z
+    _bc /= ∑z
+    _cc /= ∑z
+    =#
+    # this code calculate ac,bc,cc on the fly. Its very expensive and once we have ac,bc,cc 
+    # we should simply set these in the params 
+    Tc = 304.1282
+    pc = 7.3773e6
+    Vc = 9.41178357551188e-5
+    #=
+    Ac(x) = (Clapeyron.a_resVT(model,x,Tc,[1.]) - log(x))*(Clapeyron.R̄*Tc)
+    dAc(x) = Clapeyron.Solvers.derivative(Ac,x)
+    d2Ac(x) = Clapeyron.Solvers.derivative(dAc,x)
+    d3Ac(x) = Clapeyron.Solvers.derivative(d2Ac,x)
+    pcr, ∂pcr_∂V, ∂²pcr_∂V² = -dAc(Vc),-d2Ac(Vc),-d3Ac(Vc)
+    A = zeros(3,3)
+    A[1,1] =  1.0/pc*Vc/Vc^2
+    A[1,2] =  2.0/pc*Vc^2/Vc^3
+    A[1,3] =  3.0/pc*Vc^3/Vc^4
+    A[2,1] = -2.0/pc*Vc/Vc^3
+    A[2,2] = -6.0/pc*Vc^2/Vc^4
+    A[2,3] = -12.0/pc*Vc^3/Vc^5
+    A[3,1] =  6.0/pc*Vc/Vc^4
+    A[3,2] =  24.0/pc*Vc^2/Vc^5
+    A[3,3] =  60.0/pc*Vc^3/Vc^6
+    B = zeros(3)
+    B[1] =  (pc - pcr)/pc
+    B[2] = -∂pcr_∂V/pc
+    B[3] = -∂²pcr_∂V²/pc
+    X = A \ B
+    =#
+    X  = [-28.498001943712474, 167.96845818970314, -8.053446842593592]
+    ac = X[1]
+    bc = X[2]
+    cc = X[3]
+    rhoc = 1.0/Vc
+    rho = ∑z/V
+    delta = rho/rhoc
+     _a_crit = (ac*(delta) + bc*(delta)^2 + cc*(delta)^3)/(R̄*T)
     return _a_crit
 end
 
@@ -293,6 +341,18 @@ function a_res_crit(model ::SAFTVRMieKiselevModel, V, T, z)
     end
     _a_crit = tauc0^2/(2.0*(1.0+tauc0^2))*(a20*(tauY20 - 1.0) + a21*(tauY21 - 1.0))
     return @f(a_hs,_data) + @f(a_dispchain,_data) + @f(a_assoc,_data) + @f(a_crit,_data) - _a_crit
+end
+
+function a_resVT(model ::SAFTVRMieKiselevModel, V, T, z, _data = @f(data))
+    Vt = model.params.Vt.values
+    _Vt = zero(T+V+first(z))
+    for i ∈ @comps
+        zᵢ,Vtᵢ = z[i],Vt[i]
+        _Vt += zᵢ*Vtᵢ
+    end
+    Veos = V + _Vt
+    _a_resVT = a_res_base(model, Veos, T, z, _data)
+    return _a_resVT
 end
 
 function a_res(model ::SAFTVRMieKiselevModel, V, T, z, _data = @f(data))
@@ -351,14 +411,16 @@ function a_res(model ::SAFTVRMieKiselevModel, V, T, z, _data = @f(data))
 =#
 #    _data = @f(data)
 #    ∑z = sum(z)
+#=
     Vt = model.params.Vt.values
     _Vt = zero(T+V+first(z))
     for i ∈ @comps
         zᵢ,Vtᵢ = z[i],Vt[i]
         _Vt += zᵢ*Vtᵢ
     end
-#    Veos = V + _Vt/∑z
     Veos = V + _Vt
-    _a_res = a_res_base(model, Veos, T, z, _data)
+    _a_res = a_res_base(model, Veos, T, z, _data) + a_crit(model, V, T, z, _data)
+    =#
+    _a_res = a_resVT(model, V, T, z, _data) + a_crit(model, V, T, z, _data)
     return _a_res
 end
