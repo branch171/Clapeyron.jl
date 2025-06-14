@@ -223,16 +223,10 @@ function a_crit(model ::SAFTVRMieVTCModel, V, T, z, _data=@f(data))
     ac = model.params.ac.values
     bc = model.params.bc.values
     cc = model.params.cc.values
-#    _ac = zero(T+V+first(z))
-#    _bc = zero(T+V+first(z))
-#    _cc = zero(T+V+first(z))
     _a_crit = zero(T+V+first(z))
     rho = 1.0/V
     for i ∈ @comps
         zᵢ,acᵢ,bcᵢ,ccᵢ = z[i],ac[i],bc[i],cc[i]
-    #    _ac += zᵢ*acᵢ
-    #    _bc += zᵢ*bcᵢ
-    #    _cc += zᵢ*ccᵢ
         _a_crit += zᵢ*(acᵢ*rho + bcᵢ*rho^2 + ccᵢ*rho^3)/(R̄*T)
     end
      _a_crit /= ∑z 
