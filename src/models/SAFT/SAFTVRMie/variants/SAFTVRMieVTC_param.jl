@@ -210,40 +210,44 @@ end
 
 # Critical point correction term
 function a_crit(model ::SAFTVRMieVTC_paramModel, V, T, z, _data=@f(data))
-    ∑z = sum(z)
     # this code calculate ac,bc,cc on the fly. Its very expensive and once we have ac,bc,cc 
-    # we should simply set these in the params 
+    # we should simply set these in the params
+    
+    # these are hard code and need to be set for the component we are tuning
     Tc = 304.1282
     pc = 7.3773e6
     Vc = 9.41178357551188e-5
-    #=
+ 
     Ac(x) = (Clapeyron.a_resVT(model,x,Tc,[1.]) - log(x))*(Clapeyron.R̄*Tc)
     dAc(x) = Clapeyron.Solvers.derivative(Ac,x)
     d2Ac(x) = Clapeyron.Solvers.derivative(dAc,x)
     d3Ac(x) = Clapeyron.Solvers.derivative(d2Ac,x)
     pcr, ∂pcr_∂V, ∂²pcr_∂V² = -dAc(Vc),-d2Ac(Vc),-d3Ac(Vc)
     A = zeros(3,3)
-    A[1,1] =  1.0/pc/Vc^2
+    A[1,1] =  -1.0/pc/Vc^2
     A[1,2] =  2.0/pc/Vc^3
-    A[1,3] =  3.0/pc/Vc^4
-    A[2,1] = -2.0/pc/Vc^3
+    A[1,3] =  -3.0/pc/Vc^4
+    A[2,1] = 2.0/pc/Vc^3
     A[2,2] = -6.0/pc/Vc^4
-    A[2,3] = -12.0/pc/Vc^5
-    A[3,1] =  6.0/pc/Vc^4
+    A[2,3] = 12.0/pc/Vc^5
+    A[3,1] =  -6.0/pc/Vc^4
     A[3,2] =  24.0/pc/Vc^5
-    A[3,3] =  60.0/pc/Vc^6
+    A[3,3] =  -60.0/pc/Vc^6
     B = zeros(3)
     B[1] =  (pc - pcr)/pc
     B[2] = -∂pcr_∂V/pc
     B[3] = -∂²pcr_∂V²/pc
     X = A \ B
-    =#
-    X  = [-2.6821702662873523,1.4878926545909,-6.714251307529734]
-    _ac = X[1]*1.0e-3
-    _bc = X[2]*1.0e-6
-    _cc = X[3]*1.0e-12
-    rho = ∑z/V
-     _a_crit = (_ac*(rho) + _bc*(rho)^2 + _cc*(rho)^3)/(R̄*T)
+ 
+#    X  = [0.002682170266287352,0.0012197920538316767,0.0001886539332026171]
+
+    _ac = X[1]
+    _bc = X[2]/abs(X[2])*abs(X[2])^(1.0/2.0)
+    _cc = X[3]/abs(X[3])*abs(X[3])^(1.0/3.0)
+    
+#   note _bc loses its sign when squared so we restore with _bc/abs(_bc)
+    rho = 1.0/V
+     _a_crit = (-(_ac*rho) + _bc/abs(_bc)*(_bc*rho)^2 - (_cc*rho)^3)/(R̄*T)
     return _a_crit
 end
 
