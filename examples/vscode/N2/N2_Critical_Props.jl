@@ -1,8 +1,8 @@
 using Clapeyron, NLsolve, Plots
 
-model1 = GERG2008(["carbon dioxide"])
-model2 = SAFTVRMie(["carbon dioxide"];idealmodel=AlyLeeIdeal)
-model3 = SAFTVRMieVTC(["carbon dioxide"];idealmodel=AlyLeeIdeal)
+model1 = GERG2008(["nitrogen"])
+model2 = SAFTVRMie(["nitrogen"];idealmodel=AlyLeeIdeal)
+model3 = SAFTVRMieVTC(["nitrogen"];idealmodel=AlyLeeIdeal)
 
 (Tc1, pc1, vc1) = crit_pure(model1)
 println("GERG2008 Tc, pc, vc = $(Tc1), $(pc1), $(vc1)")
@@ -12,7 +12,7 @@ println("SAFTVRMie Tc, pc, vc = $(Tc2), $(pc2), $(vc2)")
 println("SAFTVRMieVTC Tc, pc, vc = $(Tc3), $(pc3), $(vc3)")
 
 N    = 201
-Tcs  = 0.72
+Tcs  = 0.5
 Tce  = 0.99995
 
 T1    = zeros(N)

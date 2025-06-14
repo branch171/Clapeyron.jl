@@ -23,6 +23,12 @@ default_references(::Type{SAFTVRMieVTC}) = ["10.1063/1.4819786", "10.1080/002689
 default_locations(::Type{SAFTVRMieVTC}) = ["SAFT/SAFTVRMie/SAFTVRMieVTC", "properties/molarmass.csv"]
 
 function transform_params(::Type{SAFTVRMieVTC},params,components)
+    bc = params["bc"]
+    bc.values .*= 1.0e-6
+    params["bc"] = bc
+    cc = params["cc"]
+    cc.values .*= 1.0e-12
+    params["cc"] = cc
     Vt = params["Vt"]
     Vt.values .*= 1.0e-6
     params["Vt"] = Vt
@@ -213,24 +219,23 @@ end
 
 # Critical point correction term
 function a_crit(model ::SAFTVRMieVTCModel, V, T, z, _data=@f(data))
-    # note ac,bc and cc are units of m3/mol the signs are expected to be +ve
-    # so we can add them for different components in the mixture
-    # the a_crit function has been setup to require/produce +ve coefficients
-    # for the a_res correction
+    ∑z = sum(z)
     ac = model.params.ac.values
     bc = model.params.bc.values
     cc = model.params.cc.values
-    _ac = zero(T+V+first(z))
-    _bc = zero(T+V+first(z))
-    _cc = zero(T+V+first(z))
+#    _ac = zero(T+V+first(z))
+#    _bc = zero(T+V+first(z))
+#    _cc = zero(T+V+first(z))
+    _a_crit = zero(T+V+first(z))
+    rho = 1.0/V
     for i ∈ @comps
         zᵢ,acᵢ,bcᵢ,ccᵢ = z[i],ac[i],bc[i],cc[i]
-        _ac += zᵢ*acᵢ
-        _bc += zᵢ*bcᵢ
-        _cc += zᵢ*ccᵢ
+    #    _ac += zᵢ*acᵢ
+    #    _bc += zᵢ*bcᵢ
+    #    _cc += zᵢ*ccᵢ
+        _a_crit += zᵢ*(acᵢ*rho + bcᵢ*rho^2 + ccᵢ*rho^3)/(R̄*T)
     end
-    rho = 1.0/V
-     _a_crit = (-(_ac*rho) + _bc/abs(_bc)*(_bc*rho)^2 - (_cc*rho)^3)/(R̄*T)
+     _a_crit /= ∑z 
     return _a_crit
 end
 

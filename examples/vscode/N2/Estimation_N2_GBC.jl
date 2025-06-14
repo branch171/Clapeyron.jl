@@ -1,10 +1,10 @@
 using Clapeyron,NLsolve
 
-model = SAFTVRMieVTC_param(["carbon dioxide"]);
+model = SAFTVRMieVTC_param(["nitrogen"]);
 
-Tc = 304.1282
-pc = 7.3773e6
-Vc = 9.41178357551188e-5
+Tc = 126.192
+pc = 3.3958e6
+Vc = 8.941424726615939e-5
 
 function A_critical(model,V,T,z)
     A(x) = (Clapeyron.a_resVT(model,x,T,z) - log(x))*(Clapeyron.R̄*T)
