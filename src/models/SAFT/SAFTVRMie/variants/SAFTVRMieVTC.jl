@@ -1,6 +1,5 @@
 struct SAFTVRMieVTCParam{T} <: ParametricEoSParam{T}
     Mw::SingleParam{T}
-    Vc::SingleParam{T}
     ac::SingleParam{T}
     bc::SingleParam{T}
     cc::SingleParam{T}
@@ -14,8 +13,8 @@ struct SAFTVRMieVTCParam{T} <: ParametricEoSParam{T}
     bondvol::AssocParam{T} 
 end
 
-function SAFTVRMieVTCParam(Mw,Vc,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
-    return build_parametric_param(SAFTVRMieVTCParam,Mw,Vc,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
+function SAFTVRMieVTCParam(Mw,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
+    return build_parametric_param(SAFTVRMieVTCParam,Mw,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
 end
 
 abstract type SAFTVRMieVTCModel <: SAFTVRMieModel end
@@ -24,14 +23,20 @@ default_references(::Type{SAFTVRMieVTC}) = ["10.1063/1.4819786", "10.1080/002689
 default_locations(::Type{SAFTVRMieVTC}) = ["SAFT/SAFTVRMie/SAFTVRMieVTC", "properties/molarmass.csv"]
 
 function transform_params(::Type{SAFTVRMieVTC},params,components)
-    Vc = params["Vc"]
-    Vc.values .*= 1E-6
-    params["Vc"] = Vc
+    ac = params["ac"]
+    ac.values .*= 1.0e-3
+    params["ac"] = ac
+    bc = params["bc"]
+    bc.values .*= 1.0e-6
+    params["bc"] = bc
+    cc = params["cc"]
+    cc.values .*= 1.0e-12
+    params["cc"] = cc
     Vt = params["Vt"]
-    Vt.values .*= 1E-6
+    Vt.values .*= 1.0e-6
     params["Vt"] = Vt
     sigma = params["sigma"]
-    sigma.values .*= 1E-10
+    sigma.values .*= 1.0e-10
     sigma = sigma_LorentzBerthelot(sigma)
     epsilon = epsilon_HudsenMcCoubreysqrt(params["epsilon"], sigma)
     lambda_a = lambda_LorentzBerthelot(params["lambda_a"])
@@ -218,7 +223,6 @@ end
 # Critical point correction term
 function a_crit(model ::SAFTVRMieVTCModel, V, T, z, _data=@f(data))
     ∑z = sum(z)
-    Vc = model.params.Vc.values
     ac = model.params.ac.values
     bc = model.params.bc.values
     cc = model.params.cc.values
@@ -226,10 +230,10 @@ function a_crit(model ::SAFTVRMieVTCModel, V, T, z, _data=@f(data))
     _bc = zero(T+V+first(z))
     _cc = zero(T+V+first(z))
     for i ∈ @comps
-        zᵢ,Vcᵢ,acᵢ,bcᵢ,ccᵢ = z[i],Vc[i],ac[i],bc[i],cc[i]
-        _ac += zᵢ*acᵢ*Vcᵢ
-        _bc += zᵢ*bcᵢ*Vcᵢ*Vcᵢ
-        _cc += zᵢ*ccᵢ*Vcᵢ*Vcᵢ*Vcᵢ
+        zᵢ,acᵢ,bcᵢ,ccᵢ = z[i],ac[i],bc[i],cc[i]
+        _ac += zᵢ*acᵢ
+        _bc += zᵢ*bcᵢ
+        _cc += zᵢ*ccᵢ
     end
     _ac /= ∑z
     _bc /= ∑z
