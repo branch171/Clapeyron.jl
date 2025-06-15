@@ -254,7 +254,7 @@ function a_crit(model ::SAFTVRMieVTC_paramModel, V, T, z, _data=@f(data))
     
 #   note _bc loses its sign when squared so we restore with _bc/abs(_bc)
     rho = 1.0/V
-     _a_crit = (_ac*rho + _bc*rho^2 + _cc*rho^3)/(R̄*T)
+    _a_crit = (_ac*rho + _bc*rho^2 + _cc*rho^3)/(R̄*T)
     return _a_crit
 end
 

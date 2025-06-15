@@ -39,8 +39,7 @@ B[2] = -∂pcr_∂V/pc
 B[3] = -∂²pcr_∂V²/pc
 println("SAFTVRMieVTC B = $(B)")
 X = A \ B
-println("SAFTVRMieVTC ac,bc,cc = $(X[1]),$(X[2]/1.0e-6),$(X[3]/1.0e-12)")
-#println("SAFTVRMieVTC ac,bc,cc = $(X[1]),$(sign(X[2])*abs(X[2])^(1.0/2.0)),$(sign(X[3])*abs(X[3])^(1.0/3.0))")
+println("SAFTVRMieVTC ρc ac,bc,cc = $(1.0e-3/Vc),$(X[1]),$(X[2]/1.0e-6),$(X[3]/1.0e-12)")
 
 #=
 ac = X[1]*Vc

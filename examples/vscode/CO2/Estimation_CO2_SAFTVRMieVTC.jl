@@ -4,7 +4,7 @@ method = ECA(;options=Options(iterations=50));
 
 model = SAFTVRMieVTC_param(["carbon dioxide"]);
 
-epsilon0, sigma0, Vt0, segment0, lambda_r0, lambda_a0 = 324.4615553425752, 3.219890708823705, 0.9948398809474223, 1.4241873348260334, 10.735662385205913, 9.630315677718443
+epsilon0, sigma0, Vt0, segment0, lambda_r0, lambda_a0 = 324.837770431519, 3.210549200701595, 0.9054662014067434, 1.4319726129854506, 10.832119686214046, 9.541840731089545
 
 toestimate = [
     Dict(
@@ -67,6 +67,6 @@ estimator,objective,initial,upper,lower = Estimation(model,toestimate,
 "/home/cbranch/julia/dev/Clapeyron.jl/examples/data/CO2/saturation_liquid_density.csv",
 "/home/cbranch/julia/dev/Clapeyron.jl/examples/data/CO2/saturation_vapour_density.csv"]);
 
-params, model = optimize(objective, estimator, method, verbose = true) # [210.47369467695626, 3.0476004109754324, 1.6950295942865061, 24.64992024682277, 5.157933997653782], error of 8.845986804084638e-7
+params, model = optimize(objective, estimator, method, verbose = true)
 
 println("params = $(params[3]),$(params[4]),$(params[2]),$(params[1]),$(params[5]),$(params[6])")

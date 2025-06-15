@@ -1,5 +1,6 @@
 struct SAFTVRMieVTCParam{T} <: ParametricEoSParam{T}
     Mw::SingleParam{T}
+    ρc::SingleParam{T}
     ac::SingleParam{T}
     bc::SingleParam{T}
     cc::SingleParam{T}
@@ -13,8 +14,8 @@ struct SAFTVRMieVTCParam{T} <: ParametricEoSParam{T}
     bondvol::AssocParam{T} 
 end
 
-function SAFTVRMieVTCParam(Mw,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
-    return build_parametric_param(SAFTVRMieVTCParam,Mw,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
+function SAFTVRMieVTCParam(Mw,ρc,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
+    return build_parametric_param(SAFTVRMieVTCParam,Mw,ρc,ac,bc,cc,Vt,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
 end
 
 abstract type SAFTVRMieVTCModel <: SAFTVRMieModel end
@@ -23,6 +24,9 @@ default_references(::Type{SAFTVRMieVTC}) = ["10.1063/1.4819786", "10.1080/002689
 default_locations(::Type{SAFTVRMieVTC}) = ["SAFT/SAFTVRMie/SAFTVRMieVTC", "properties/molarmass.csv"]
 
 function transform_params(::Type{SAFTVRMieVTC},params,components)
+    ρc = params["ρc"]
+    ρc.values .*= 1.0e3
+    params["ρc"] = ρc
     bc = params["bc"]
     bc.values .*= 1.0e-6
     params["bc"] = bc
@@ -220,16 +224,24 @@ end
 # Critical point correction term
 function a_crit(model ::SAFTVRMieVTCModel, V, T, z, _data=@f(data))
     ∑z = sum(z)
+    ρc = model.params.ρc.values
     ac = model.params.ac.values
     bc = model.params.bc.values
     cc = model.params.cc.values
-    _a_crit = zero(T+V+first(z))
-    rho = 1.0/V
+    _ρc = zero(T+V+first(z))
+    _ac = zero(T+V+first(z))
+    _bc = zero(T+V+first(z))
+    _cc = zero(T+V+first(z))
     for i ∈ @comps
-        zᵢ,acᵢ,bcᵢ,ccᵢ = z[i],ac[i],bc[i],cc[i]
-        _a_crit += zᵢ*(acᵢ*rho + bcᵢ*rho^2 + ccᵢ*rho^3)/(R̄*T)
+        zᵢ,ρcᵢ,acᵢ,bcᵢ,ccᵢ = z[i],ρc[i],ac[i],bc[i],cc[i]
+        _ρc += zᵢ*ρcᵢ
+        _ac += zᵢ*acᵢ*ρcᵢ
+        _bc += zᵢ*bcᵢ*ρcᵢ^2
+        _cc += zᵢ*ccᵢ*ρcᵢ^3
     end
-     _a_crit /= ∑z 
+    _ρ = ∑z/V
+    _a_crit = (_ac*(_ρ/_ρc) + _bc*(_ρ/_ρc)^2 + _cc*(_ρ/_ρc)^3)/(R̄*T)
+    _a_crit /= ∑z
     return _a_crit
 end
 

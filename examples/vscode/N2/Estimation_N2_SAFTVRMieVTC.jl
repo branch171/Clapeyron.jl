@@ -4,7 +4,7 @@ method = ECA(;options=Options(iterations=50));
 
 model = SAFTVRMieVTC_param(["nitrogen"]);
 
-epsilon0, sigma0, Vt0, segment0, lambda_r0, lambda_a0 = 88.95598160766787, 3.02926963969298, 0.2571665980273789, 1.5404059179735003, 6.456910771403877, 6.005188694324343
+epsilon0, sigma0, Vt0, segment0, lambda_r0, lambda_a0 = 88.80747797120472, 3.029733705760889, 0.24649083482539025, 1.5403372935912378, 6.447640044414523, 6.002775840884346
 
 toestimate = [
     Dict(
