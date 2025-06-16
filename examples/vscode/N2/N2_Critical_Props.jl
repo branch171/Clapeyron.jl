@@ -235,6 +235,17 @@ end
 #println("pressure = $(pressure)")
 #println("density = $(density)")
 
+p0 = plot([density,density,density,density], [pressure1,pressure2,pressure3,pressure4],
+label=["SAFTVRMie" "SAFTVRMie" "SAFTVRMieVTC" "SAFTVRMieVTC"], 
+xlabel = "rho [kmol/m3]", 
+ylabel = "p [bara]",
+left_margin = 10Plots.mm,
+bottom_margin = 10Plots.mm,
+grid = :on,
+xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+linewidth=3,size=(1600,1200))
+display(p0)
+
 p1 = plot([rhov1,rhol1,rhov2,rhol2,rhov3,rhol3], [psat1,psat1,psat2,psat2,psat3,psat3],
 label=["GERG2008" "GERG2008" "SAFTVRMie" "SAFTVRMie" "SAFTVRMieVTC" "SAFTVRMieVTC"], 
 xlabel = "rho [kmol/m3]", 

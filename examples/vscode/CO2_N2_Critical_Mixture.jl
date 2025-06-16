@@ -28,8 +28,8 @@ for j=1:2
     T_2[:,j] = T[:,2]
 end
 
-N = 20
-x = range(1e-3,1.0-1e-3,length=N)
+N = 10
+x = range(0.001,1.0-0.001,length=N)
 X = Clapeyron.FractionVector.(x)
 T_crit = zeros(N,2)
 p_crit = zeros(N,2)
@@ -38,18 +38,19 @@ for j=1:2
     p_crit[1,j] = p_2[end,j]
     T_crit[N,j] = T_1[end,j]
     p_crit[N,j] = p_1[end,j]
-    v0 = Clapeyron.x0_crit_mix(models[j],X[1])
+#    v0 = Clapeyron.x0_crit_mix(models[j],X[1])
     for i=2:N-1
-        mix_crit = crit_mix(models[j],X[i];v0=v0)
-        v0 = [log10(mix_crit[3]),mix_crit[1]]
+         mix_crit = crit_mix(models[j],X[i])
+    #    mix_crit = crit_mix(models[j],X[i];v0=v0)
+    #    v0 = [log10(mix_crit[3]),mix_crit[1]]
         
         T_crit[i,j] = mix_crit[1]
         p_crit[i,j] = mix_crit[2]
     end
 end
 
-#println("T_crit GERG2008 = $(T_crit[:,1])")
-#println("T_crit SAFTVRMieVTC = $(T_crit[:,2])")
+println("T_crit GERG2008 = $(T_crit[:,1])")
+println("T_crit SAFTVRMieVTC = $(T_crit[:,2])")
 
 p1 = plot([T_1[:,1],T_1[:,2],T_2[:,1],T_2[:,2],T_crit[:,1],T_crit[:,2]], [p_1[:,1],p_1[:,2],p_2[:,1],p_2[:,2],p_crit[:,1],p_crit[:,2]],
 label=["GERG2008 CO2" "SAFTVRMieVTC CO2" "GERG2008 N2" "SAFTVRMieVTC N2" "GERG2008 Critcal" "SAFTVRMieVTC Critical"], 

@@ -4,47 +4,50 @@ method = ECA(;options=Options(iterations=50));
 
 model = SAFTVRMieVTC_param(["nitrogen"]);
 
-epsilon0, sigma0, Vt0, segment0, lambda_r0, lambda_a0 = 88.80747797120472, 3.029733705760889, 0.24649083482539025, 1.5403372935912378, 6.447640044414523, 6.002775840884346
+epsilon0, sigma0, Vt0, segment0, lambda_r0, lambda_a0 = 100.3058277709549, 3.3874858344843504, -1.0566022880475023, 1.1839031712373538, 9.022799607850791, 7.380416354257889
+
+lb_fac = 0.7
+ub_fac = 1.3
 
 toestimate = [
     Dict(
         :param => :epsilon,
-        :lower => epsilon0*0.8,
-        :upper => epsilon0*1.2,
+        :lower => epsilon0*lb_fac,
+        :upper => epsilon0*1ub_fac,
         :guess => epsilon0
     ),
     Dict(
         :param => :sigma,
         :factor => 1e-10,
-        :lower => sigma0*0.8,
-        :upper => sigma0*1.2,
+        :lower => sigma0*lb_fac,
+        :upper => sigma0*ub_fac,
         :guess => sigma0
     ),
     Dict(
         :param => :Vt,
         :factor => 1e-6,
-        :lower => Vt0*0.8,
-        :upper => Vt0*1.2,
-    #    :lower => -1.0,
-    #    :upper =>  1.0,
-        :guess => Vt0
+    #    :lower => Vt0*lb_fac,
+    #    :upper => Vt0*ub_fac,
+        :lower => -1.5,
+        :upper =>  1.5,
+        :guess =>  Vt0
     ),
     Dict(
         :param => :segment,
-        :lower => segment0*0.8,
-        :upper => segment0*1.2,
+        :lower => segment0*lb_fac,
+        :upper => segment0*ub_fac,
         :guess => segment0
     ),
     Dict(
         :param => :lambda_r,
-        :lower => lambda_r0*0.8,
-        :upper => lambda_r0*1.2,
+        :lower => lambda_r0*lb_fac,
+        :upper => lambda_r0*ub_fac,
         :guess => lambda_r0
     ),
     Dict(
         :param => :lambda_a,
-        :lower => lambda_a0*0.8,
-        :upper => lambda_a0*1.2,
+        :lower => lambda_a0*lb_fac,
+        :upper => lambda_a0*ub_fac,
         :guess => lambda_a0
     )
 ];

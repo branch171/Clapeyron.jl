@@ -232,6 +232,17 @@ for i in 1:N
     pressure4[i] = pr4/1e5
 end
 
+p0 = plot([density,density,density,density], [pressure1,pressure2,pressure3,pressure4],
+label=["SAFTVRMie" "SAFTVRMie" "SAFTVRMieVTC" "SAFTVRMieVTC"], 
+xlabel = "rho [kmol/m3]", 
+ylabel = "p [bara]",
+left_margin = 10Plots.mm,
+bottom_margin = 10Plots.mm,
+grid = :on,
+xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+linewidth=3,size=(1600,1200))
+display(p0)
+
 #println("pressure = $(pressure)")
 #println("density = $(density)")
 

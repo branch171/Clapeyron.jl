@@ -5,7 +5,7 @@ model1 = GERG2008(["carbon dioxide"])
 (Tc1, pc1, vc1) = crit_pure(model1)
 println("GERG2008 Tc, pc, rhoc = $(Tc1), $(pc1), $(vc1)")
 
-N    = 201
+N    = 51
 Ts1  = 0.72
 Te1  = 0.99995
 
@@ -14,7 +14,7 @@ println("Tend = $(Te1*Tc1-273.15)")
 
 T1    = zeros(N)
 for i = 1:N
-    T1[i] = Ts1*Tc1 + (Te1*Tc1 - Ts1*Tc1)*((i-1)/(N-1))
+    T1[i] = Ts1*Tc1 + (Te1*Tc1 - Ts1*Tc1)*((i-1)/(N-1))^(1.0/3.0)
 end
 
 psat1  = zeros(N)
