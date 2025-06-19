@@ -219,7 +219,7 @@ function a_res_base(model ::SAFTVRMieKiselevModel, V, T, z, _data=@f(data))
     return @f(a_hs,_data) + @f(a_dispchain,_data) + @f(a_assoc,_data)
 end
 
-function Z_base(model ::SAFTVRMieKiselevModel, V, T, z) 
+function Z_base(model ::SAFTVRMieKiselevModel, V, T, z)
     ares(x)  = a_res_base(model, x, T, z,)
     dares(x) = Solvers.derivative(ares,x) 
     return 1.0 - V*dares(V)
@@ -234,8 +234,8 @@ function a_res(model ::SAFTVRMieKiselevModel, V, T, z)
     d1 = model.params.d1.values
     v1 = model.params.v1.values
     Gi = model.params.Gi.values
-    _Tc = zero(T+V+first(z))
-    _vc = zero(T+V+first(z))
+    Δτ = zero(T+V+first(z))
+    Δϕ = zero(T+V+first(z))
     _Tc0 = zero(T+V+first(z))
     _vc0 = zero(T+V+first(z))
     _d1 = zero(T+V+first(z))
@@ -243,49 +243,44 @@ function a_res(model ::SAFTVRMieKiselevModel, V, T, z)
     invGi = zero(T+V+first(z))
     for i ∈ @comps
         zᵢ,Tcᵢ,vcᵢ,Tc0ᵢ,vc0ᵢ,d1ᵢ,v1ᵢ,Giᵢ = z[i],Tc[i],vc[i],Tc0[i],vc0[i],d1[i],v1[i],Gi[i]
-        _Tc += zᵢ*Tcᵢ
-        _vc += zᵢ*vcᵢ
+        Δτ += zᵢ*(Tcᵢ/Tc0ᵢ - 1.0)
+        Δϕ += zᵢ*(vcᵢ/vc0ᵢ - 1.0)
         _Tc0 += zᵢ*Tc0ᵢ
         _vc0 += zᵢ*vc0ᵢ
         _d1 += zᵢ*d1ᵢ
         _v1 += zᵢ*v1ᵢ
         invGi += zᵢ/Giᵢ
     end
-    _Tc /= ∑z
-    _vc /= ∑z
+    Δτ /= ∑z
+    Δϕ /= ∑z
     _Tc0 /= ∑z
     _vc0 /= ∑z
+    _Tc = _Tc0 + Δτ*_Tc0
+    _vc = _vc0 + Δϕ*_vc0
     _d1 /= ∑z
     _v1 /= ∑z
     _Gi = 1.0/invGi/∑z
     b = sqrt(1.359)
     m = 1.3
-    beta = 0.324
+    beta = 0.325
     alpha = 0.11
     gamma = 2.0-alpha-2.0*beta
     D = 0.51  
     v = V/∑z
- #   vc = 9.41178357551188e-5
- #   vc0 = 9.321269842141535e-5
- #   Tc = 304.1282
- #   Tc0 = 306.9950676462668
-    tau = T/_Tc - 1.0
-    Dtau = _Tc/_Tc0 - 1.0
-    phi = v/_vc - 1.0
-    Dphi = _vc/_vc0 - 1.0
-    phi_hat = phi*(1.0 + _v1*(phi^2)*exp(-8.5*phi)) + _d1*tau*(1.0 - 2.0*tau)
-    fnc2 = 4.0*(b/m*abs(phi_hat))^(1.0/beta) + 2.0*tau
-    q = sqrt((fnc2 + sqrt(fnc2^2 + 12.0*tau^2))/6.0/_Gi)
+    τ = T/_Tc - 1.0
+    ϕ = v/_vc - 1.0
+    fnc = 4.0*(b/m*abs(ϕ*(1.0 + _v1*(ϕ^2)*exp(-8.5*ϕ)) + _d1*τ*(1.0 - 2.0*τ)))^(1.0/beta) + 2.0*τ
+    q = sqrt((fnc + sqrt(fnc^2 + 12.0*τ^2))/6.0/_Gi)
     Y = (q/(1.0+q))^2
-    tauY = 0.0
+    τY = 0.0
     if Y > 0.0
-        tauY = tau*Y^(-alpha/2.0)
+        τY = τ*Y^(-alpha/2.0)
     end
-    taum = tauY + (1.0 + tau)*Dtau*Y^(2.0*(2.0 - alpha)/3.0)
-    Tm = _Tc0*(taum + 1.0)
-    phim = phi*Y^((gamma - 2.0*beta)/4.0) + (1.0 + phi)*Dphi*Y^((2.0 - alpha)/2.0)
-    vm = _vc0*(phim + 1.0)
-    Dv = v/_vc0 - 1.0
-    _a_res = a_res_base(model, vm, Tm, z) - a_res_base(model, _vc0, Tm, z) + a_res_base(model, _vc0, T, z) + phim*Z_base(model, _vc0, Tm, z) - Dv*Z_base(model, _vc0, T, z) + log((Dv + 1.0)/(phim + 1.0))
+    τs = τY + (1.0 + τ)*Δτ*Y^(2.0*(2.0 - alpha)/3.0)
+    Ts = _Tc0*(τs + 1.0)
+    ϕs = ϕ*Y^((gamma - 2.0*beta)/4.0) + (1.0 + ϕ)*Δϕ*Y^((2.0 - alpha)/2.0)
+    vs = _vc0*(ϕs + 1.0)
+    Δv = v/_vc0 - 1.0
+    _a_res = a_res_base(model, vs, Ts, z) - a_res_base(model, _vc0, Ts, z) + a_res_base(model, _vc0, T, z) + ϕs*Z_base(model, _vc0, Ts, z) - Δv*Z_base(model, _vc0, T, z) + log((Δv + 1.0)/(ϕs + 1.0))
     return _a_res
 end
