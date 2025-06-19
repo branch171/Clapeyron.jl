@@ -274,6 +274,11 @@ include("models/SAFT/SAFTVRMie/variants/eSAFTVRMie.jl")
 include("models/SAFT/PCSAFT/variants/ePCSAFT.jl")
 include("models/SAFT/CPA/variants/eCPA.jl")
 
+#CrossOver theory
+include("models/SAFT/SAFTVRMie/variants/SAFTVRMieCrossOverBase.jl")
+include("models/CrossOver/crossover.jl")
+include("models/CrossOver/variants/Kiselev2000.jl")
+
 
 include("methods/property_solvers/electrolytes/electrolytes.jl")
 include("methods/property_solvers/multicomponent/tp_flash/electrolyte_flash.jl")
