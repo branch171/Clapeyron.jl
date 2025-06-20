@@ -187,7 +187,6 @@ include("models/SAFT/SAFTVRMie/variants/SAFTVRQMie.jl")
 include("models/SAFT/SAFTVRMie/variants/SAFTVRMie15.jl")
 include("models/SAFT/SAFTVRMie/variants/SAFTVRMieVTC_param.jl")
 include("models/SAFT/SAFTVRMie/variants/SAFTVRMieVTC.jl")
-include("models/SAFT/SAFTVRMie/variants/SAFTVRMieKiselev.jl")
 include("models/SAFT/SAFTVRMie/variants/SAFTVRSMie.jl")
 include("models/SAFT/SAFTVRMie/variants/SAFTVRMieGV.jl")
 include("models/SAFT/SAFTgammaMie/SAFTgammaMie.jl")
@@ -275,7 +274,7 @@ include("models/SAFT/PCSAFT/variants/ePCSAFT.jl")
 include("models/SAFT/CPA/variants/eCPA.jl")
 
 #CrossOver theory
-include("models/SAFT/SAFTVRMie/variants/SAFTVRMieCrossOverBase.jl")
+include("models/SAFT/SAFTVRMie/variants/SAFTVRMieKiselev.jl")
 include("models/CrossOver/crossover.jl")
 include("models/CrossOver/variants/Kiselev2000.jl")
 

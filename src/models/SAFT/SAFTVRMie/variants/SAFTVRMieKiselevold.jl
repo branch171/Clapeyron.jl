@@ -1,5 +1,12 @@
-struct SAFTVRMieCrossOverBaseParam{T} <: ParametricEoSParam{T}
+struct SAFTVRMieKiselevParam{T} <: ParametricEoSParam{T}
     Mw::SingleParam{T}
+    Tc::SingleParam{T}
+    vc::SingleParam{T}
+    Tc0::SingleParam{T}
+    vc0::SingleParam{T}
+    d1::SingleParam{T}
+    v1::SingleParam{T}
+    Gi::SingleParam{T}
     segment::SingleParam{T}
     sigma::PairParam{T}
     lambda_a::PairParam{T}
@@ -9,16 +16,30 @@ struct SAFTVRMieCrossOverBaseParam{T} <: ParametricEoSParam{T}
     bondvol::AssocParam{T} 
 end
 
-function SAFTVRMieCrossOverBaseParam(Mw,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
-    return build_parametric_param(SAFTVRMieCrossOverBaseParam,Mw,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
+function SAFTVRMieKiselevParam(Mw,Tc,vc,Tc0,vc0,d1,v1,Gi,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
+    return build_parametric_param(SAFTVRMieKiselevParam,Mw,Tc,vc,Tc0,vc0,d1,v1,Gi,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
 end
 
-abstract type SAFTVRMieCrossOverBaseModel <: SAFTVRMieModel end
-@newmodel SAFTVRMieCrossOverBase SAFTVRMieCrossOverBaseModel SAFTVRMieCrossOverBaseParam{T}
-default_references(::Type{SAFTVRMieCrossOverBase}) = ["10.1063/1.4819786", "10.1080/00268976.2015.1029027"]
-default_locations(::Type{SAFTVRMieCrossOverBase}) = ["SAFT/SAFTVRMie/SAFTVRMieCrossOverBase", "properties/molarmass.csv"]
+abstract type SAFTVRMieKiselevModel <: SAFTVRMieModel end
+@newmodel SAFTVRMieKiselev SAFTVRMieKiselevModel SAFTVRMieKiselevParam{T}
+default_references(::Type{SAFTVRMieKiselev}) = ["10.1063/1.4819786", "10.1080/00268976.2015.1029027"]
+default_locations(::Type{SAFTVRMieKiselev}) = ["SAFT/SAFTVRMie/SAFTVRMieKiselev", "properties/molarmass.csv"]
 
-function transform_params(::Type{SAFTVRMieCrossOverBase},params,components)
+function transform_params(::Type{SAFTVRMieKiselev},params,components)
+    #=
+    ρc = params["ρc"]
+    ρc.values .*= 1.0e3
+    params["ρc"] = ρc
+    ac = params["ac"]
+    ac.values .*= 1.0e-3
+    params["ac"] = ac
+    bc = params["bc"]
+    bc.values .*= 1.0e-6
+    params["bc"] = bc
+    Vt = params["Vt"]
+    Vt.values .*= 1.0e-6
+    params["Vt"] = Vt
+    =#
     sigma = params["sigma"]
     sigma.values .*= 1.0e-10
     sigma = sigma_LorentzBerthelot(sigma)
@@ -33,7 +54,7 @@ function transform_params(::Type{SAFTVRMieCrossOverBase},params,components)
 end
 
 """
-    SAFTVRMieCrossOverBaseModel <: SAFTVRMieModel
+    SAFTVRMieKiselevModel <: SAFTVRMieModel
 
     SAFTVRMie(components;
     idealmodel = BasicIdeal,
@@ -45,6 +66,7 @@ end
 
 ## Input parameters
 - `Mw`: Single Parameter (`Float64`) - Molecular Weight `[g/mol]`
+- `Vt`: Single Parameter (`Float64`) - Volume Translation `[m3/mol]`
 - `segment`: Single Parameter (`Float64`) - Number of segments (no units)
 - `sigma`: Single Parameter (`Float64`) - Segment Diameter [`A°`]
 - `epsilon`: Single Parameter (`Float64`) - Reduced dispersion energy  `[K]`
@@ -76,23 +98,23 @@ SAFT-VR with Mie potential and the Mie association kernel
 1. Lafitte, T., Apostolakou, A., Avendaño, C., Galindo, A., Adjiman, C. S., Müller, E. A., & Jackson, G. (2013). Accurate statistical associating fluid theory for chain molecules formed from Mie segments. The Journal of Chemical Physics, 139(15), 154504. [doi:10.1063/1.4819786](https://doi.org/10.1063/1.4819786)
 2. Dufal, S., Lafitte, T., Haslam, A. J., Galindo, A., Clark, G. N. I., Vega, C., & Jackson, G. (2015). The A in SAFT: developing the contribution of association to the Helmholtz free energy within a Wertheim TPT1 treatment of generic Mie fluids. Molecular Physics, 113(9–10), 948–984. [doi:10.1080/00268976.2015.1029027](https://doi.org/10.1080/00268976.2015.1029027)
 """
-SAFTVRMieCrossOverBase
+SAFTVRMieKiselev
 
-export SAFTVRMieCrossOverBase
+export SAFTVRMieKiselev
 
-function x0_volume_liquid(model::SAFTVRMieCrossOverBaseModel,T,z)
+function x0_volume_liquid(model::SAFTVRMieKiselevModel,T,z)
     v_lb = lb_volume(model,z)
     return v_lb*1.7
 end
 
-function I(model::SAFTVRMieCrossOverBaseModel, V, T, z,i, j,_data = @f(data))
+function I(model::SAFTVRMieKiselevModel, V, T, z,i, j,_data = @f(data))
     _d,ρS,ζi,_ζ_X,_ζst,σ3_x = _data
     ϵ = model.params.epsilon.values[i,j]
     Tr = T/ϵ
     λr = model.params.lambda_r.values[i,j]
     res = zero(_ζst)
     ρr = ρS*σ3_x
-    b = SAFTVRMieCrossOverBaseconsts.b
+    b = SAFTVRMieKiselevconsts.b
     rhostar_to_i = one(res)
     @inbounds for i = 0:10
         Tstar_to_j = one(res)
@@ -112,7 +134,7 @@ function I(model::SAFTVRMieCrossOverBaseModel, V, T, z,i, j,_data = @f(data))
     return res
 end
 
-const SAFTVRMieCrossOverBaseonsts = (
+const SAFTVRMieKiselevconsts = (
    b = [[0.0132970702182068	-0.0177199122935443	0.0293736747694974	-0.0205527304404423	0.00861683420907605	-0.00228505275303600	0.000390171133200072	-4.26035888869942e-05	2.86246920519487e-06	-1.07315320963937e-07	1.70912976772329e-09
         -0.0465504528847432	0.332597325549352	-0.326575316241193	0.144653671541451	-0.0363193315289496	0.00569934220115537	-0.000581966173216051	3.83608167089024e-05	-1.50305409953983e-06	2.66749257811143e-08	0
         0.164972499633366	-0.974898725377830	0.919082550772666	-0.367978443660284	0.0788054156983951	-0.00981102799831725	0.000717901835772044	-2.91191052989125e-05	5.17207032026779e-07	0	0
@@ -192,6 +214,73 @@ const SAFTVRMieCrossOverBaseonsts = (
         8.47595203890549e-10	0	0	0	0	0	0	0	0	0	0]],
 )
 
-function a_res(model ::SAFTVRMieCrossOverBaseModel, V, T, z, _data=@f(data))
+# base a_res without critical correction
+function a_res_base(model ::SAFTVRMieKiselevModel, V, T, z, _data=@f(data))
     return @f(a_hs,_data) + @f(a_dispchain,_data) + @f(a_assoc,_data)
+end
+
+function Z_base(model ::SAFTVRMieKiselevModel, V, T, z)
+    ares(x)  = a_res_base(model, x, T, z,)
+    dares(x) = Solvers.derivative(ares,x) 
+    return 1.0 - V*dares(V)
+end
+
+function a_res(model ::SAFTVRMieKiselevModel, V, T, z)
+    ∑z = sum(z)
+    Tc = model.params.Tc.values
+    vc = model.params.vc.values
+    Tc0 = model.params.Tc0.values
+    vc0 = model.params.vc0.values
+    d1 = model.params.d1.values
+    v1 = model.params.v1.values
+    Gi = model.params.Gi.values
+    Δτ = zero(T+V+first(z))
+    Δϕ = zero(T+V+first(z))
+    _Tc0 = zero(T+V+first(z))
+    _vc0 = zero(T+V+first(z))
+    _d1 = zero(T+V+first(z))
+    _v1 = zero(T+V+first(z))
+    invGi = zero(T+V+first(z))
+    for i ∈ @comps
+        zᵢ,Tcᵢ,vcᵢ,Tc0ᵢ,vc0ᵢ,d1ᵢ,v1ᵢ,Giᵢ = z[i],Tc[i],vc[i],Tc0[i],vc0[i],d1[i],v1[i],Gi[i]
+        Δτ += zᵢ*(Tcᵢ/Tc0ᵢ - 1.0)
+        Δϕ += zᵢ*(vcᵢ/vc0ᵢ - 1.0)
+        _Tc0 += zᵢ*Tc0ᵢ
+        _vc0 += zᵢ*vc0ᵢ
+        _d1 += zᵢ*d1ᵢ
+        _v1 += zᵢ*v1ᵢ
+        invGi += zᵢ/Giᵢ
+    end
+    Δτ /= ∑z
+    Δϕ /= ∑z
+    _Tc0 /= ∑z
+    _vc0 /= ∑z
+    _Tc = _Tc0 + Δτ*_Tc0
+    _vc = _vc0 + Δϕ*_vc0
+    _d1 /= ∑z
+    _v1 /= ∑z
+    _Gi = 1.0/invGi/∑z
+    b = sqrt(1.359)
+    m = 1.3
+    beta = 0.325
+    alpha = 0.11
+    gamma = 2.0-alpha-2.0*beta
+    D = 0.51  
+    v = V/∑z
+    τ = T/_Tc - 1.0
+    ϕ = v/_vc - 1.0
+    fnc = 4.0*(b/m*abs(ϕ*(1.0 + _v1*(ϕ^2)*exp(-8.5*ϕ)) + _d1*τ*(1.0 - 2.0*τ)))^(1.0/beta) + 2.0*τ
+    q = sqrt((fnc + sqrt(fnc^2 + 12.0*τ^2))/6.0/_Gi)
+    Y = (q/(1.0+q))^2
+    τY = 0.0
+    if Y > 0.0
+        τY = τ*Y^(-alpha/2.0)
+    end
+    τs = τY + (1.0 + τ)*Δτ*Y^(2.0*(2.0 - alpha)/3.0)
+    Ts = _Tc0*(τs + 1.0)
+    ϕs = ϕ*Y^((gamma - 2.0*beta)/4.0) + (1.0 + ϕ)*Δϕ*Y^((2.0 - alpha)/2.0)
+    vs = _vc0*(ϕs + 1.0)
+    Δv = v/_vc0 - 1.0
+    _a_res = a_res_base(model, vs, Ts, z) - a_res_base(model, _vc0, Ts, z) + a_res_base(model, _vc0, T, z) + ϕs*Z_base(model, _vc0, Ts, z) - Δv*Z_base(model, _vc0, T, z) + log((Δv + 1.0)/(ϕs + 1.0))
+    return _a_res
 end
