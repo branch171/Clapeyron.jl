@@ -5,16 +5,17 @@ model1 = GERG2008(["nitrogen"])
 (Tc1, pc1, vc1) = crit_pure(model1)
 println("GERG2008 Tc, pc, vc = $(Tc1), $(pc1), $(vc1)")
 
-N    = 101
+N    = 201
 Ts1  = 0.5
 Te1  = 0.99995
+ind = 2.0
 
 println("Tstart = $(Ts1*Tc1-273.15)")
 println("Tend = $(Te1*Tc1-273.15)")
 
 T1    = zeros(N)
 for i = 1:N
-    T1[i] = Ts1*Tc1 + (Te1*Tc1 - Ts1*Tc1)*((i-1)/(N-1))^(1.0/3.0)
+    T1[i] = Ts1*Tc1 + (Te1*Tc1 - Ts1*Tc1)*((i-1)/(N-1))^(1.0/ind)
 end
 
 psat1  = zeros(N)
@@ -29,7 +30,10 @@ cpV1   = zeros(N)
 aL1    = zeros(N)
 aV1    = zeros(N)
 
-v0 = [0.0,0.0]
+sat = saturation_pressure(model1, Ts1*Tc1)
+
+v0 = [sat[2],sat[3]]
+println("v0 = $(v0)")
 
 for i in 1:N
     if i==1
@@ -53,30 +57,5 @@ for i in 1:N
     cpV1[i]  = Clapeyron.VT_isobaric_heat_capacity(model1,vv1[i],T1[i],[1.])
     aL1[i]   = Clapeyron.VT_speed_of_sound(model1,vl1[i],T1[i],[1.])
     aV1[i]   = Clapeyron.VT_speed_of_sound(model1,vv1[i],T1[i],[1.])
-#    println("$(T1[i]), $(psat1[i]), $(rhov1[i]), $(rhol1[i])")
+    println("$(T1[i]), $(psat1[i]), $(rhov1[i]), $(rhol1[i])")
 end
-
-println("press")
-for i in 1:N
-    println("$(T1[i]),$(psat1[i])")
-end
-println("rho liq")
-for i in 1:N
-    println("$(T1[i]),$(rhol1[i])")
-end
-println("rho vap")
-for i in 1:N
-    println("$(T1[i]),$(rhov1[i])")
-end
-
-T1C = T1 .- 273.15
-P1bar = psat1 ./ 1e5
-
-p1 = plot([rhov1,rhol1], [P1bar,P1bar], xlabel = "rho [kmol/m3]", ylabel = "p [bara]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,size=(1600,1200))
-display(p1)
-
-p2 = plot([T1C,T1C], [cpV1,cpL1], xlabel = "Temperature [deg C]", ylabel = "Cp [J/mol]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,size=(1600,1200))
-display(p2)
-
-p3 = plot([T1C,T1C], [aV1,aL1], xlabel = "Temperature [deg C]", ylabel = "a [m/s]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,size=(1600,1200))
-display(p3)
