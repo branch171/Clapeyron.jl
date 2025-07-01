@@ -48,12 +48,12 @@ function recombine_impl!(model::CrossOver)
     recombine!(basemodel)
     pures = split_pure_model(basemodel)
     crits = crit_pure.(pures)
-    Tc = first.(crits)
-    Pc = getindex.(crits,2)
-    Vc = last.(crits)
-    model.params.Pc0 .= Pc
-    model.params.Tc0 .= Tc
-    model.params.Vc0 .= Vc
+    Tc0 = first.(crits)
+    Pc0 = getindex.(crits,2)
+    Vc0 = last.(crits)
+    model.params.Pc0 .= Pc0
+    model.params.Tc0 .= Tc0
+    model.params.Vc0 .= Vc0
     recombine!(model.critmodel)
     return model
 end
@@ -72,7 +72,7 @@ function Base.show(io::IO,mime::MIME"text/plain",model::CrossOver)
     length(model) == 1 && print(io, " with 1 component:")
     length(model) > 1 && print(io, " with ", length(model), " components:")
     print(io,'\n'," Base Model: ",model.basemodel)
-    print(io,'\n'," Liquid Model: ",model.critmodel)
+    print(io,'\n'," CrossOver Model: ",model.critmodel)
 end
 
 function x0_crit_pure(model::CrossOver)

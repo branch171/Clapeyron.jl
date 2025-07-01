@@ -551,6 +551,8 @@ function pure_spinodal(model,T::K,v_lb::K,v_ub::K,phase::Symbol,retry,z = SA[1.0
         return pure_spinodal(model,T,v_lb_new,v_ub_new,phase,false)
     end
 
+    v_bracket = (0.0,0.0)
+    dp_bracket = (0.0,0.0)
     if dfx*dfh < 0
         if vx < vh
             v_bracket = (vx,vh)

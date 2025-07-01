@@ -19,6 +19,17 @@ struct ABCCubicParam <: EoSParam
     Mw::SingleParam{Float64}
 end
 
+struct ABCBaseCubicParam <: EoSParam
+    a::PairParam{Float64}
+    b::PairParam{Float64}
+    c::PairParam{Float64}
+    Tc::SingleParam{Float64}
+    Pc::SingleParam{Float64}
+    Vc::SingleParam{Float64}
+    Zc0::SingleParam{Float64}
+    Mw::SingleParam{Float64}
+end
+
 const ONLY_VC = vcat(IGNORE_HEADERS,["Tc","Pc", "w"])
 const ONLY_ACENTRICFACTOR = vcat(IGNORE_HEADERS,["Tc", "Pc", "Vc"])
 """
@@ -602,6 +613,24 @@ function transform_params(::Type{ABCCubicParam},params,components)
     Pc = params["Pc"]
     c = get!(params,"c") do
         PairParam("c",components,zeros(Base.promote_eltype(Pc,Tc,Vc),n))
+    end
+    c isa SingleParam && (params["c"] = PairParam(c))
+    return params
+end
+
+function transform_params(::Type{ABCBaseCubicParam},params,components)
+    n = length(components)
+    transform_params(ABCubicParam,params,components)
+    Vc = get!(params,"Vc") do
+        SingleParam("Vc",components)
+    end
+    Zc0 = get!(params,"Zc0") do
+        SingleParam("Zc0",components)
+    end
+    Tc = params["Tc"]
+    Pc = params["Pc"]
+    c = get!(params,"c") do
+        PairParam("c",components,zeros(Base.promote_eltype(Pc,Tc,Vc,Zc0),n))
     end
     c isa SingleParam && (params["c"] = PairParam(c))
     return params
