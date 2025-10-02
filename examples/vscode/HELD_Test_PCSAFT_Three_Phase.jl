@@ -13,7 +13,7 @@ z = [0.64,0.06,0.28,0.005,0.015]
 
 verbose = true
 
-beta,xp,vp,Gsol = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(verbose = verbose))
+xp,beta,vp,Gsol = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(verbose = verbose))
 
 if !verbose
     for ip in eachindex(beta)

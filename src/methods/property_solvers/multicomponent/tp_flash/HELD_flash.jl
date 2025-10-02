@@ -63,7 +63,8 @@ function tp_flash_impl(model::EoSModel, p, T, n, method::HELDTPFlash)
 		println("HELD  - add_all_guess = $(add_all_guess)")
 	end
 	beta,xp,vp,Gsol = HELD_impl(model,p,T,z₀,max_HELD_iters,max_trust_region_iters,tol,HELD_tol,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess,verbose)
-    return FlashResult(xp,beta,vp,FlashData(p,T,Gsol))
+#    return beta,xp,vp,Gsol 
+	return FlashResult(xp,beta,vp,FlashData(p,T,Gsol))
 end
 
 # new HELD

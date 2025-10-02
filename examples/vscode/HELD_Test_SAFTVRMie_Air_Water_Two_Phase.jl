@@ -14,7 +14,7 @@ z=append!(zdry*(1-zwater),zwater)
 
 verbose = true
 add_all_guess = false
-beta,xp,vp,Gsol = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(add_all_guess = add_all_guess,verbose = verbose))
+xp,beta,vp,Gsol = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(add_all_guess = add_all_guess,verbose = verbose))
 
 if !verbose
     for ip in eachindex(beta)
