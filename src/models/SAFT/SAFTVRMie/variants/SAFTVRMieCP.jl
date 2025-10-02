@@ -6,6 +6,9 @@ struct SAFTVRMieCPParam{T} <: ParametricEoSParam{T}
     ac::SingleParam{T}
     bc::SingleParam{T}
     cc::SingleParam{T}
+    dc::SingleParam{T}
+    ec::SingleParam{T}
+    fc::SingleParam{T}
     segment::SingleParam{T}
     sigma::PairParam{T}
     lambda_a::PairParam{T}
@@ -15,8 +18,8 @@ struct SAFTVRMieCPParam{T} <: ParametricEoSParam{T}
     bondvol::AssocParam{T} 
 end
 
-function SAFTVRMieCPParam(Mw,Tc,Pc,Vc,ac,bc,cc,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
-    return build_parametric_param(SAFTVRMieCPParam,Mw,Tc,Pc,Vc,ac,cc,bc,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
+function SAFTVRMieCPParam(Mw,Tc,Pc,Vc,ac,bc,cc,dc,ec,fc,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol)
+    return build_parametric_param(SAFTVRMieCPParam,Mw,Tc,Pc,Vc,ac,cc,bc,dc,ec,fc,segment,sigma,lambda_a,lambda_r,epsilon,epsilon_assoc,bondvol) 
 end
 
 abstract type SAFTVRMieCPModel <: SAFTVRMieModel end
@@ -141,17 +144,28 @@ end
 # Critical point correction term
 function a_crit(model ::SAFTVRMieCPModel, V, T, z, _data=@f(data))
     ∑z = sum(z)
+    Tc = model.params.Tc.values
     ac = model.params.ac.values
     bc = model.params.bc.values
     cc = model.params.cc.values
+    dc = model.params.dc.values
+    ec = model.params.ec.values
+    fc = model.params.fc.values
     _ac = zero(T+V+first(z))
     _bc = zero(T+V+first(z))
     _cc = zero(T+V+first(z))
+    _dc = zero(T+V+first(z))
+    _ec = zero(T+V+first(z))
+    _fc = zero(T+V+first(z))
     for i ∈ @comps
-        zᵢ,acᵢ,bcᵢ,ccᵢ = z[i],ac[i],bc[i],cc[i]
-        _ac += zᵢ*acᵢ
-        _bc += zᵢ*bcᵢ
-        _cc += zᵢ*ccᵢ
+        zᵢ,Tcᵢ,acᵢ,bcᵢ,ccᵢ,dcᵢ,ecᵢ,fcᵢ = z[i],Tc[i],ac[i],bc[i],cc[i],dc[i],ec[i],fc[i]
+        _dc += zᵢ*dcᵢ
+        _ec += zᵢ*ecᵢ
+        _fc += zᵢ*fcᵢ
+        fncᵢ = _dc*exp(-_ec*(T/Tcᵢ - 1.0)^2) + (1.0 - _dc)*exp(-_fc*(T/Tcᵢ - 1.0)^2)
+        _ac += zᵢ*acᵢ*fncᵢ
+        _bc += zᵢ*bcᵢ*fncᵢ
+        _cc += zᵢ*ccᵢ*fncᵢ
     end
     _ac /= ∑z
     _bc /= ∑z

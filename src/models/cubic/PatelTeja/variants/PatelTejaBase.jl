@@ -145,10 +145,15 @@ function ab_premixing(model::PatelTejaBaseModel,mixing::MixingRule,k,l)
     a = model.params.a
     b = model.params.b
     n = length(model)
-#    _Zc = _pc .* _Vc ./ (R̄ .* _Tc)
-    _poly = [(-_Zc[i]^3,3*_Zc[i]^2,2-3*_Zc[i],1.) for i ∈ 1:n]
-    sols = Solvers.roots3.(_poly)
-    Ωb = [minimum(real.(sols[i][isreal.(sols[1]).*real.(sols[1]).>0])) for i ∈ 1:n]
+#    _poly = [(-_Zc[i]^3,3*_Zc[i]^2,2-3*_Zc[i],1.) for i ∈ 1:n]
+#    sols = Solvers.roots3.(_poly)
+#    Ωb = [minimum(real.(sols[i][isreal.(sols[1]).*real.(sols[1]).>0])) for i ∈ 1:n]
+    Ωb = zeros(n)
+    for i = 1:n
+        Zc = complex(_Zc[i],0)
+        d  = 36*Zc - 8 - 27*Zc^2 + 3*sqrt(3)*sqrt(27*Zc^4 -8*Zc^3)
+        Ωb[i] = real(1/3*(3*Zc - 2) - (12*Zc - 4)/(3*(d)^(1/3)) + 1/3*(d)^(1/3))
+    end
     Ωa = @. 3*_Zc^2+3*(1-2*_Zc)*Ωb+Ωb^2+1-3*_Zc
     diagvalues(a) .= @. Ωa*R̄^2*_Tc^2/_pc
     diagvalues(b) .= @. Ωb*R̄*_Tc/_pc

@@ -1,0 +1,5 @@
+Clapeyron Database File
+VTRPCSAFT Like Parameters
+species,DIPPR Number,Mw,Tc,Pc,Vc,c1,c2,segment,sigma,epsilon,n_H,n_e,source
+carbon dioxide,,44.01,304.1282,7.3773e6,9.4118e-5,7.679999999827482e-6, 0.06475200000088413,2.66827,2.61212,147.234,1.0,0.0,10.1016/j.fluid.2015.12.044
+nitrogen,,28.01,126.192,3.3958e6,8.9414e-5,-0.9738,0.5280,1.26985,3.26557,88.136,1.0,0.0,10.1016/j.fluid.2015.12.044

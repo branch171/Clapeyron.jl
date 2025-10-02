@@ -8,7 +8,8 @@ println("GERG2008 Tc, pc, vc = $(Tca), $(Pca), $(Vca)")
 Vc0 = 0.3137072/Pca*Clapeyron.R̄*Tca
 println("PatelTeja Vc0 = $(Vc0)")
 
-model = PatelTejaKiselev(["carbon dioxide"];alpha=PatelTejaCrossOverAlpha,translation=ConstantTranslation(["carbon dioxide"];userlocations = (;v_shift = [-3.4946129933965922e-6])),idealmodel=AlyLeeIdeal)
+#model = PatelTejaKiselev(["carbon dioxide"];alpha=PatelTejaCrossOverAlpha,translation=ConstantTranslation(["carbon dioxide"];userlocations = (;v_shift = [-3.4946129933965922e-6])),idealmodel=AlyLeeIdeal)
+model = PatelTejaKiselev(["carbon dioxide"];alpha=PatelTejaCrossOverAlpha,idealmodel=AlyLeeIdeal)
 
 (Tcb, Pcb, Vcb) = crit_pure(model)
 println("PatelTejaKiselev Tc, Pc, Vc = $(Tcb), $(Pcb), $(Vcb)")
@@ -161,7 +162,7 @@ display(p0)
 #println("density = $(density)")
 
 vvmax  = 1e-3/1.5
-vvmin  = 1e-3/22.0
+vvmin  = 1e-3/20.0
 
 pressure5 = zeros(N)
 density = zeros(N)
@@ -173,7 +174,7 @@ for i in 1:N
 end
 
 p1 = plot([rhov1,rhol1,rhov2,rhol2,density], [psat1,psat1,psat2,psat2,pressure5],
-label=["GERG2008" "GERG2008" "PatelTejaKiselev" "PatelTejaKiselev"], 
+label=["GERG2008" "GERG2008" "PatelTejaKiselev" "PatelTejaKiselev" "PatelTejaKiselev @290K"], 
 xlabel = "rho [kmol/m3]", 
 ylabel = "p [bara]",
 left_margin = 10Plots.mm,

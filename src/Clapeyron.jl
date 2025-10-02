@@ -279,6 +279,10 @@ include("models/cubic/PatelTeja/variants/PatelTejaKiselev.jl")
 include("models/CrossOver/crossover.jl")
 include("models/CrossOver/variants/Kiselev2000.jl")
 
+#Volume Translation via distance functions
+include("models/SAFT/PCSAFT/variants/VTRPCSAFT.jl")
+include("models/VolumeTranslation/volumetranslation.jl")
+include("models/VolumeTranslation/variants/VTRShi2024.jl")
 
 include("methods/property_solvers/electrolytes/electrolytes.jl")
 include("methods/property_solvers/multicomponent/tp_flash/electrolyte_flash.jl")
