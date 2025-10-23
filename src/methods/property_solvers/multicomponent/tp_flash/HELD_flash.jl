@@ -16,7 +16,7 @@ using HiGHS
 Base.@kwdef struct HELDTPFlash <: TPFlashMethod
     max_HELD_iters::Int = 0
     max_trust_region_iters::Int = 0
-    tol::Float64 = 0.1*sqrt(eps(Float64))
+    tol::Float64 = 0.01*sqrt(eps(Float64))
     HELD_tol::Float64 = sqrt(eps(Float64))
 	add_pure_guess::Bool = true
     add_anti_pure_guess::Bool = true
@@ -1138,7 +1138,7 @@ function HELD_impl(model,p,T,z₀,
 			#		println("HELD Step 3 - IPₓᵥ solve, xmin = $(xmin)")
  	  		#	end
 				
-				if fmin <= UBDⱽ  && check == false
+				if fmin <= (UBDⱽ + max(tol*0.1, eps(Float64))) && check == false
 					push!(fmins,fmin)
 					push!(xmins,xmin)
 				end
@@ -1154,8 +1154,9 @@ function HELD_impl(model,p,T,z₀,
 			end
 			
 			if verbose == true
-        		println("HELD Step 3 - IPₓᵥ solve, $(length(fmins_unique)) unique solutions found")
-			#	println("HELD Step 3 - IPₓᵥ solve, xmin = $(xmins_unique)")
+        		println("HELD Step 3 - IPₓᵥ solve unique, $(length(fmins_unique)) unique solutions found")
+			#	println("HELD Step 3 - IPₓᵥ solve unique, fmin = $(fmins_unique)")
+			#	println("HELD Step 3 - IPₓᵥ solve unique, xmin = $(xmins_unique)")
     		end
     		
     		ℒ = Vector{Vector{Float64}}(undef,0)
@@ -1225,7 +1226,7 @@ function HELD_impl(model,p,T,z₀,
 #        				println("HELD Step 3 - IPₓᵥ solve, fmin = $(fmin) error = $(error) iter = $(iter)")
 #    				end
 
-					if fmin <= UBDⱽ  && check == false
+					if fmin <= (UBDⱽ + max(tol*0.1, eps(Float64))) && check == false
     					push!(fmins,fmin)
     					push!(xmins,xmin)
     				end
