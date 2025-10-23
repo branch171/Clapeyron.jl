@@ -69,9 +69,8 @@ println("Enthalpy out = $(htout) J/mol")
 function Qmod(model,p,T,z,hspec)
     fr = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(verbose = verbose))
     g = fr.data.g
-    return (g*Clapeyron.R̄ - hspec/T),fr.fractions
+    return (g - hspec/Clapeyron.R̄/T),fr.fractions
 end
-
 
 Qa,βa = Qmod(model,pout,Tout-0.1,zin,htin)
 Qb,βb = Qmod(model,pout,Tout,zin,htin)
@@ -99,8 +98,6 @@ display(p1)
 
 p2 = plot([Tg], [βg], xlabel = "T deg C", ylabel = "βg [-]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,tickfontsize=12,size=(1600,1200))
 display(p2)
-
- 
 
 function phflashmin(T)
    Qa,βa = Qmod(model,pout,T,zin,htin)
@@ -216,130 +213,87 @@ println("Ta = $(ta - 273.15) deg C, qa = $(qa) J/mol/K, npa = $(npa)")
 println("Tb = $(tb - 273.15) deg C, qb = $(qb) J/mol/K, npa = $(npb)")
 println("Tc = $(tc - 273.15) deg C, qc = $(qc) J/mol/K, npa = $(npc)")
 
-#=
-function findmaximum(
-  F::Function,        # Function whose maximum is sought, Float64 -> Float64
-  p1::Float64,        # Left endpoint of interval in which to search
-  p2::Float64,        # Initial test point
-  p3::Float64,        # Right endpoint of interval in which to search
-  fp1::Float64,       # F(p1)
-  fp2::Float64,       # F(p2)
-  fp3::Float64,       # F(p3)
-  tolerance::Float64) # Precision required in final answer
-  # Searches for a maximum of F in the interval [p1,p3] using a
-  # combination of golden section steps and Brent steps.  In a Brent step,
-  # a parabola is fitted to the triple (p1,p2,p3), and the next test point
-  # is chosen to be the extreme point of the parabola, if it is within
-  # the interval [p1, p3].  See section 10.3 of "Numerical Recipes"
-  # for a description of Brent's method.
-  #
-  # On input, p1, p2 and p3 must satisfy the following conditions:
-  #     p1 < p2 < p3
-  #    f(p1) < f(p2)
-  #    f(p3) < f(p2)
-  #
-  # The search terminates when an interval [x1,x2,x3] is found such that
-  # |F(x2) - F(x1)| < tolerance and |F(x2) - F(x3)| < tolerance.
-  #
-  # This code should be compared to Brent_fmin in the R package,
-  # which seems to be a nearly verbatim implementation of the code as given
-  # in "Numerical Recipes" (which itself is probably a verbatim copy of
-  # Brent's original Algol code, but I have not verified this).
-  #
-  # In a few simple tests that I tried, this code outperformed
-  # the R optimize() function.
-  #
-  # R.P. Brent (1973), "Algorithms for Minimization Without Derivatives,"
-  # Chapter 4. Prentice-Hall, Englewood Cliffs, NJ.
-  #
-  # See also http://en.wikipedia.org/wiki/Brent%27s_method
-
-  min_eps = sqrt(eps(Float64)) 
-
-  (x1, x2, x3) = (p1, p2, p3)
-  (fx1, fx2, fx3) = (fp1, fp2, fp3)
-  
-  function update(x1::Float64, x2::Float64, x3::Float64, 
-    fx1::Float64, fx2::Float64, fx3::Float64, x4::Float64)
-    # On input [x1, x2, x3] is a bracketing triple and
-    # [fx1, fx2, fx3] are the values of F at these points.
-    # The point x4 is a test point between x1 and x3.  Calculates
-    # f(x4) and returns a smaller bracketing sextuple
-    #   (x1', x2', x3', fx1', fx2', fx3')
-    # satisfying x1 <= x1' < x2' < x3' <= x3
-    # with F(x2') > F(x1') and F(x2') > F(x3')
-    fx4 = F(x4)::Float64
-    if x4 < x2
-      if fx4 > fx2
-        (x2,x3,fx2,fx3) = (x4,x2,fx4,fx2)
+function findminimum(func::Function,ax,bx,cx,tol)
+		ITMAX=100
+		CGOLD=0.3819660
+		ZEPS=eps(Float64)*1.0e-3
+    d=0.0
+		e=0.0
+		a=(ax < cx) ? ax : cx
+		b=(ax > cx) ? ax : cx
+		x=w=v=bx
+		fw=fv=fx=func(x)
+		for iter=1:ITMAX
+			xm=0.5*(a+b)
+      tol1=tol*abs(x)+ZEPS
+			tol2=2.0*tol1
+    #  println("abs(x-xm) = $(abs(x-xm)), tol = $((tol2-0.5*(b-a)))")
+			if (abs(x-xm) <= (tol2-0.5*(b-a)))
+				return x, fx, iter
+      end
+			if (abs(e) > tol1)
+				r=(x-w)*(fx-fv)
+				q=(x-v)*(fx-fw)
+				p=(x-v)*q-(x-w)*r
+				q=2.0*(q-r)
+				if (q > 0.0)
+          p = -p
+        end
+				q=abs(q)
+				etemp=e
+				e=d
+				if (abs(p) >= abs(0.5*q*etemp) || p <= q*(a-x) || p >= q*(b-x))
+          e=(x >= xm) ? a-x : b-x
+					d=CGOLD*e
+				else
+					d=p/q
+					u=x+d
+					if (u-a < tol2 || b-u < tol2)
+						d=signab(tol1,xm-x)
+          end
+        end
+			else
+        e=(x >= xm) ? a-x : b-x
+				d=CGOLD*e
+      end
+			u=(abs(d) >= tol1) ? x+d : x+signab(tol1,d)
+			fu=func(u)
+			if (fu <= fx)
+				if (u >= x) 
+          a=x 
+        else 
+          b=x
+        end
+        v = w
+        w = x
+        x = u
+        fv = fw
+        fw = fx
+        fx = fu
       else
-        (x1,fx1) = (x4, fx4)
+				if (u < x) 
+          a=u 
+        else 
+          b=u
+        end
+				if (fu <= fw || w == x)
+					v=w
+					w=u
+					fv=fw
+					fw=fu
+				elseif (fu <= fv || v == x || v == w)
+					v=u
+					fv=fu
+        end
       end
-    else
-      if fx4 > fx2
-        (x1, x2, fx1, fx2) = (x2, x4, fx2, fx4)
-      else
-        (x3, fx3) = (x4, fx4)
-      end
-    end
-    (x1, x2, x3, fx1, fx2, fx3)
-  end
-  
-  phi = (1. + sqrt(5.))/2.
-  resphi = 2.0 - phi
-  phim1 = phi - 1.
-
-  iter = 0
-  w0 = 0.  # The proportion by which the search range was reduced 2 iterations ago
-  w1 = 0.  # The proportion by which the search range was last reduced
-  while (iter < 100) && ((fx2 - fx1 > tolerance) || (fx2 - fx3 > tolerance))
-    iter += 1
-    golden_section_step_needed = true
-    xwidth = x3 - x1
-    
-    # Try to do a Brent step
-    bnum = (x2-x1)^2*(fx2-fx3)-(x2-x3)^2*(fx2-fx1)
-    bden = (x2-x1)*(fx2-fx3)-(x2-x3)*(fx2-fx1)
-    x4 = x2 - 0.5 * bnum/bden
-    xmin_eps = min_eps * x2 + tolerance/3
-    # Avoid evaluating the function at points that are too close together.
-    if abs(x4 - x2) < xmin_eps
-      x4 = (x2 - x1 > x3 - x2) ? (x2 - xmin_eps) : (x2 + xmin_eps)
-    end
-    
-    if (x4 - x1 > xmin_eps) && (x3 - x4 > xmin_eps)
-      (x1, x2, x3, fx1, fx2, fx3) = update(x1, x2, x3, fx1, fx2, fx3, x4)
-      (w0, w1) = (w1, (x3 - x1) / xwidth)
-      # The following test imposes the condition that in order to avoid
-      # a golden section step, the last two successive Brent steps must reduce
-      # the width of the bracketing interval by at least as much as one 
-      # golden section step.  This optimization was suggested in "Numerical
-      # Recipes".
-      if w0 * w1 < phim1
-        golden_section_step_needed = false
-      end
-      iter += 1
-    end    
-
-    # Check if a golden section step is needed and do it
-    if golden_section_step_needed
-      if x2 - x1 > x3 - x2
-        x4 = x2 - resphi*(x2 - x1)
-      else
-        x4 = x2 + resphi*(x3 - x2)
-      end
-      (x1, x2, x3, fx1, fx2, fx3) = update(x1, x2, x3, fx1, fx2, fx3, x4)
-      (w0, w1) = (w1, (x3 - x1) / xwidth)
-    end
-  end
-  
-  (x2, fx2)
+    #  println("v = $(v), w = $(w), x = $(x)")
+		end
+    return x, fx, ITMAX
 end
 
-Tmin, Qmin = findmaximum(phflashmax, ta, tb, tc, -qa, -qb, -qc, 1.0e-8)
-=#
+Tmin, Qmin, Iter = findminimum(phflashmin2, ta, tb, tc, sqrt(eps(Float64)))
 
-println("Tmin = $(Tmin - 273.15) deg C")
+println("Tmin = $(Tmin - 273.15) deg C, Qmin = $(Qmin), Iteration = $(Iter)")
 
 flash_result_out = Clapeyron.tp_flash_impl(model,pout,Tmin,zin, HELDTPFlash(verbose = false))
 println("flash_result_out = $(flash_result_out)")
