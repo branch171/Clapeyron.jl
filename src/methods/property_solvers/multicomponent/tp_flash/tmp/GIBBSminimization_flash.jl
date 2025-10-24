@@ -1,10 +1,10 @@
 using HiGHS
 
 """
-    HELDTPFlash(;   max_HELD_iters::Int = 0
+    GIBBSTPFlash(;   max_GIBBS_iters::Int = 0
     				max_trust_region_iters::Int = 0
-    				tol::Float64 = HELD_tol/10
-    				HELD_tol::Float64 = sqrt(eps)
+    				tol::Float64 = GIBBS_tol/10
+    				GIBBS_tol::Float64 = sqrt(eps)
 					add_pure_guess = true
     				add_anti_pure_guess = true
     				add_pure_component = [0]
@@ -13,11 +13,11 @@ using HiGHS
     				verbose = true)
 
 """
-Base.@kwdef struct HELDTPFlash <: TPFlashMethod
-    max_HELD_iters::Int = 0
+Base.@kwdef struct GIBBSTPFlash <: TPFlashMethod
+    max_GIBBS_iters::Int = 0
     max_trust_region_iters::Int = 0
     tol::Float64 = 0.01*sqrt(eps(Float64))
-    HELD_tol::Float64 = sqrt(eps(Float64))
+    GIBBS_tol::Float64 = sqrt(eps(Float64))
 	add_pure_guess::Bool = true
     add_anti_pure_guess::Bool = true
     add_pure_component::Vector{Bool} = Vector{Bool}(undef,0)
@@ -26,14 +26,14 @@ Base.@kwdef struct HELDTPFlash <: TPFlashMethod
     verbose::Bool = false
 end
 
-function tp_flash_impl(model::EoSModel, p, T, n, method::HELDTPFlash)
+function tp_flash_impl(model::EoSModel, p, T, n, method::GIBBSTPFlash)
 	z₀ = n
 	sumz₀ = sum(z₀)
 	z₀ ./= sumz₀
-	if method.max_HELD_iters == 0
-		max_HELD_iters = 100*length(n)
+	if method.max_GIBBS_iters == 0
+		max_GIBBS_iters = 100*length(n)
 	else
-		max_HELD_iters = method.max_HELD_iters
+		max_GIBBS_iters = method.max_GIBBS_iters
 	end
 	if method.max_trust_region_iters == 0
 		max_trust_region_iters = 2000*length(n)
@@ -41,7 +41,7 @@ function tp_flash_impl(model::EoSModel, p, T, n, method::HELDTPFlash)
 		max_trust_region_iters = method.max_trust_region_iters
 	end
 	tol = method.tol
-	HELD_tol = method.HELD_tol
+	GIBBS_tol = method.GIBBS_tol
 	if length(method.add_pure_component) == 0 || length(method.add_pure_component) !== length(n)
 		add_pure_component = fill(true,length(n))
 	else
@@ -53,23 +53,23 @@ function tp_flash_impl(model::EoSModel, p, T, n, method::HELDTPFlash)
 	add_all_guess = method.add_all_guess
 	verbose = method.verbose
 	if verbose == true
-		println("HELD  - Setup:")
-		println("HELD  - trust region tolerence = $(tol)")
-		println("HELD  - HELD tolerence = $(HELD_tol)")
-		println("HELD  - add_pure_guess = $(add_pure_guess)")
-		println("HELD  - add_anti_pure_guess = $(add_anti_pure_guess)")
-		println("HELD  - add_pure_component = $(add_pure_component)")
-		println("HELD  - add_random_guess = $(add_random_guess)")
-		println("HELD  - add_all_guess = $(add_all_guess)")
+		println("GIBBS  - Setup:")
+		println("GIBBS  - trust region tolerence = $(tol)")
+		println("GIBBS  - GIBBS tolerence = $(GIBBS_tol)")
+		println("GIBBS  - add_pure_guess = $(add_pure_guess)")
+		println("GIBBS  - add_anti_pure_guess = $(add_anti_pure_guess)")
+		println("GIBBS  - add_pure_component = $(add_pure_component)")
+		println("GIBBS  - add_random_guess = $(add_random_guess)")
+		println("GIBBS  - add_all_guess = $(add_all_guess)")
 	end
-	beta,xp,vp,Gsol = HELD_impl(model,p,T,z₀,max_HELD_iters,max_trust_region_iters,tol,HELD_tol,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess,verbose)
+	beta,xp,vp,Gsol = GIBBS_impl(model,p,T,z₀,max_GIBBS_iters,max_trust_region_iters,tol,GIBBS_tol,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess,verbose)
 #    return beta,xp,vp,Gsol 
 	return FlashResult(xp,beta,vp,FlashData(p,T,Gsol))
 end
 
-# new HELD
+# new GIBBS
 
-function ConstraintsHELD(x,lb,ub,lbrho,ubrho,s)
+function ConstraintsGIBBS(x,lb,ub,lbrho,ubrho,s)
     n = size(x)[1]
 	xp = Vector{Base.promote_eltype(x,lb,ub,s)}(undef,n)
 	
@@ -97,7 +97,7 @@ function ConstraintsHELD(x,lb,ub,lbrho,ubrho,s)
 
 end
 
-function ConstraintsHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho,s)
+function ConstraintsGibbs(x,np,n₀,lb,ub,lbrho,ubrho,s)
     n = size(x)[1]
 	xs = Vector{Base.promote_eltype(x)}(undef,n)
 	
@@ -165,7 +165,7 @@ function ConstraintsHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho,s)
 
 end
 
-function ProjectionHELD(x,lb,ub,lbrho,ubrho)
+function ProjectionGIBBS(x,lb,ub,lbrho,ubrho)
     n = size(x)[1]
     p = Vector{Base.promote_eltype(x)}(undef,n)
     xp = Vector{Base.promote_eltype(x)}(undef,n)
@@ -202,7 +202,7 @@ function ProjectionHELD(x,lb,ub,lbrho,ubrho)
     return p
 end
 
-function ProjectionHELD_base(x,lb,ub)
+function Projection(x,lb,ub)
     n = size(x)[1]
     p = Vector{Base.promote_eltype(x)}(undef,n)
     for i = 1:n
@@ -217,7 +217,7 @@ function ProjectionHELD_base(x,lb,ub)
     return p
 end
 
-function ProjectionHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
+function ProjectionGibbs(x,np,n₀,lb,ub,lbrho,ubrho)
 	n = size(x)[1]
     p = Vector{Base.promote_eltype(x)}(undef,0)
 	nc = length(n₀)
@@ -225,7 +225,7 @@ function ProjectionHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
 	xp = Vector{Vector{eltype(x)}}(undef,0)
     rhop = Vector{eltype(x)}(undef,0)
 
-#	println("ProjectionHELD_Gibbs x  = $(x)")
+#	println("ProjectionGibbs x  = $(x)")
 
     ix = 0
     for ip=1:np-1
@@ -285,10 +285,10 @@ function ProjectionHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
 		end
 	end
 
-#	println("ProjectionHELD_Gibbs outside  = $(outside)")
-#	println("ProjectionHELD_Gibbs beta  = $(beta)")
-#	println("ProjectionHELD_Gibbs xp  = $(xp)")
-#	println("ProjectionHELD_Gibbs rhop  = $(rhop)")
+#	println("ProjectionGibbs outside  = $(outside)")
+#	println("ProjectionGibbs beta  = $(beta)")
+#	println("ProjectionGibbs xp  = $(xp)")
+#	println("ProjectionGibbs rhop  = $(rhop)")
 
 	if outside
 		# normalise after bounds check
@@ -350,7 +350,7 @@ function ProjectionHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
 		end
 		push!(p,xp[np][nc])
 
-#		println("ProjectionHELD_Gibbs p  = $(p)")
+#		println("ProjectionGibbs p  = $(p)")
 
 		return p
 	else
@@ -358,41 +358,41 @@ function ProjectionHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
 	end
 end
 
-function HELD_func_rho(model,p,T,x₀,vref,rho)
+function GIBBS_func_rho(model,p,T,x₀,vref,rho)
     v = vref/rho
     A = eos(model,v,T,x₀)
     f = (A + p*v)/R̄/T
     return f
 end
 
-function HELD_func_p(model,p₀,T,x₀,vref,rho)
+function GIBBS_func_p(model,p₀,T,x₀,vref,rho)
     v = vref/rho
 	p,dpdV = p∂p∂V(model,v,T,x₀)
     return p₀ - p
 end
 
-function HELD_func_dpdV(model,T,x₀,vref,rho)
+function GIBBS_func_dpdV(model,T,x₀,vref,rho)
     v = vref/rho
 	p,dpdV = p∂p∂V(model,v,T,x₀)
     return dpdV
 end
 
 #=
-function HELD_volume1(model,p,T,x₀,vref,rho)
-	G(x) = HELD_func_rho(model,p,T,[x,1.0-x],vref,rho) + 5.474135924873183*(0.95 - x)
+function GIBBS_volume1(model,p,T,x₀,vref,rho)
+	G(x) = GIBBS_func_rho(model,p,T,[x,1.0-x],vref,rho) + 5.474135924873183*(0.95 - x)
     dG(x) = Solvers.derivative(G,x)
 	ddG(x) = Solvers.derivative(dG,x)
     return G(x₀), dG(x₀), ddG(x₀)
 end
 
-function HELD_volume2(model,p,T,x₀,vref,rho)
-	G(x) = HELD_func_rho(model,p,T,x₀,vref,x)
-	dG(x) = HELD_func_p(model,p,T,x₀,vref,x)
-	ddG(x) = HELD_func_dpdV(model,T,x₀,vref,x)
+function GIBBS_volume2(model,p,T,x₀,vref,rho)
+	G(x) = GIBBS_func_rho(model,p,T,x₀,vref,x)
+	dG(x) = GIBBS_func_p(model,p,T,x₀,vref,x)
+	ddG(x) = GIBBS_func_dpdV(model,T,x₀,vref,x)
     return G(rho), dG(rho), ddG(rho)
 end
 
-function HELD_volume(model,p,T,x₀)
+function GIBBS_volume(model,p,T,x₀)
 	pure = split_pure_model(model)
 	crit = crit_pure.(pure)
 	vref = 0.0
@@ -400,16 +400,16 @@ function HELD_volume(model,p,T,x₀)
     	Tc,pc,vc = crit[i]
     	vref += x₀[i]*vc
 	end
-	v₀ = HELD_density(model,p,T,x₀,vref)
+	v₀ = GIBBS_density(model,p,T,x₀,vref)
 	return vref/v₀
 end
 =#
 
-function HELD_density(model,p,T,x₀,vref)
+function GIBBS_density(model,p,T,x₀,vref)
 
-	G(x) = HELD_func_rho(model,p,T,x₀,vref,x)
-	dG(x) = HELD_func_p(model,p,T,x₀,vref,x)
-	ddG(x) = HELD_func_dpdV(model,T,x₀,vref,x)
+	G(x) = GIBBS_func_rho(model,p,T,x₀,vref,x)
+	dG(x) = GIBBS_func_p(model,p,T,x₀,vref,x)
+	ddG(x) = GIBBS_func_dpdV(model,T,x₀,vref,x)
 	
 	# calculate rho_ideal
 	rho_ideal = vref/(R̄*T/p)
@@ -542,7 +542,7 @@ function HELD_density(model,p,T,x₀,vref)
 
 end
 
-function HELD_func(model,p,T,n₀,v₀,x,λ)
+function GIBBS_func(model,p,T,n₀,v₀,x,λ)
     nc = length(n₀)
     xₙ = append!(deepcopy(x[1:nc-1]),1.0 - sum(x[1:nc-1]))
     v = v₀/x[end]
@@ -551,7 +551,7 @@ function HELD_func(model,p,T,n₀,v₀,x,λ)
     return f
 end
 
-function HELD_Gibbs_func(model,p,T,n₀,v₀,np,x)
+function Gibbs_func(model,p,T,n₀,v₀,np,x)
 	nc = length(n₀)
 	beta = Vector{eltype(x)}(undef,0)
 	xp = Vector{Vector{eltype(x)}}(undef,0)
@@ -590,7 +590,7 @@ function HELD_Gibbs_func(model,p,T,n₀,v₀,np,x)
     return f
 end
 
-function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess)
+function initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess)
 	n = length(z)
     
 	#=
@@ -614,7 +614,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     xvap = z.*K
     sumxvap = sum(xvap)
     xvap ./= sumxvap
-    xvap = ProjectionHELD_base(xvap,lb,ub)
+    xvap = Projection(xvap,lb,ub)
     sumxvap = sum(xvap)
     xvap ./= sumxvap
     push!(xp,xvap)
@@ -622,7 +622,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     xliq = z./K
     sumxliq = sum(xliq)
     xliq ./= sumxliq
-    xliq = ProjectionHELD_base(xliq,lb,ub)
+    xliq = Projection(xliq,lb,ub)
     sumxliq = sum(xliq)
     xliq ./= sumxliq
     push!(xp,xliq)
@@ -632,14 +632,14 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     xvap = z.*Kn
     sumxvap = sum(xvap)
     xvap ./= sumxvap
-    xvap = ProjectionHELD_base(xvap,lb,ub)
+    xvap = Projection(xvap,lb,ub)
     sumxvap = sum(xvap)
     xvap ./= sumxvap
     push!(xp,xvap)
     xliq = z./Kn
     sumxliq = sum(xliq)
     xliq ./= sumxliq
-    xliq = ProjectionHELD_base(xliq,lb,ub)
+    xliq = Projection(xliq,lb,ub)
     sumxliq = sum(xliq)
     xliq ./= sumxliq
     push!(xp,xliq)
@@ -649,14 +649,14 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     xvap = z.*Kn
     sumxvap = sum(xvap)
     xvap ./= sumxvap
-    xvap = ProjectionHELD_base(xvap,lb,ub)
+    xvap = Projection(xvap,lb,ub)
     sumxvap = sum(xvap)
     xvap ./= sumxvap
     push!(xp,xvap)
     xliq = z./Kn
     sumxliq = sum(xliq)
     xliq ./= sumxliq
-    xliq = ProjectionHELD_base(xliq,lb,ub)
+    xliq = Projection(xliq,lb,ub)
     sumxliq = sum(xliq)
     xliq ./= sumxliq
     push!(xp,xliq)
@@ -684,7 +684,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
         		xi[i] = z[i]/k
         		sumxi = sum(xi)
         		xi ./= sumxi
-        		xi = ProjectionHELD_base(xi,lb,ub)
+        		xi = Projection(xi,lb,ub)
     			sumxi = sum(xi)
     			xi ./= sumxi
         		push!(xp,xi)
@@ -695,7 +695,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     			xvap = xi.*K
     			sumxvap = sum(xvap)
     			xvap ./= sumxvap
-    			xvap = ProjectionHELD_base(xvap,lb,ub)
+    			xvap = Projection(xvap,lb,ub)
     			sumxvap = sum(xvap)
     			xvap ./= sumxvap
     			push!(xp,xvap)
@@ -703,7 +703,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     			xliq = xi./K
     			sumxliq = sum(xliq)
     			xliq ./= sumxliq
-    			xliq = ProjectionHELD_base(xliq,lb,ub)
+    			xliq = Projection(xliq,lb,ub)
     			sumxliq = sum(xliq)
     			xliq ./= sumxliq
     			push!(xp,xliq)
@@ -728,7 +728,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     
 end
 
-function HELD_Pereira_compositions(model,p,T,z)
+function Pereira_compositions(model,p,T,z)
     
 	n = length(z)
 
@@ -773,11 +773,11 @@ function HELD_Pereira_compositions(model,p,T,z)
 					x̄[j] = (1.0 - (z[i] + d[id]*(1.0 - z[i])))/(n-1)
 				end
 			end
-			x̂ = ProjectionHELD_base(x̂,lb,ub)
+			x̂ = Projection(x̂,lb,ub)
 			sumx̂ = sum(x̂)
 			x̂ ./= sumx̂
 			push!(xp,x̂)
-			x̄ = ProjectionHELD_base(x̄,lb,ub)
+			x̄ = Projection(x̄,lb,ub)
 			sumx̄ = sum(x̄)
 			x̄ ./= sumx̄
 			push!(xp,x̄)
@@ -788,11 +788,11 @@ function HELD_Pereira_compositions(model,p,T,z)
     
 end
 
-function HELD_impl(model,p,T,z₀,
-	max_HELD_iters,
+function GIBBS_impl(model,p,T,z₀,
+	max_GIBBS_iters,
 	max_trust_region_iters,
 	tol,
-	HELD_tol,
+	GIBBS_tol,
 	add_pure_guess,
 	add_anti_pure_guess,
 	add_pure_component,
@@ -815,15 +815,15 @@ function HELD_impl(model,p,T,z₀,
 	
 
 #	vref = 3.35*lb_volume(model,T,z₀)
-#	println("HELD Step 1 - vref = $(vref) vref_crit = $(vref_crit)")
+#	println("GIBBS Step 1 - vref = $(vref) vref_crit = $(vref_crit)")
 
- 	ρ₀ = HELD_density(model,p,T,z₀,vref)
+ 	ρ₀ = GIBBS_density(model,p,T,z₀,vref)
 	v₀ = vref/ρ₀
     μ₀ = VT_chemical_potential(model,v₀,T,z₀)
     λ₀ = (μ₀[1:nc-1] .- μ₀[nc])/R̄/T
  
-	ρ₀ = HELD_density(model,p,T,z₀,vref)
-    G(x) = HELD_func(model,p,T,z₀,vref,x,λ₀)
+	ρ₀ = GIBBS_density(model,p,T,z₀,vref)
+    G(x) = GIBBS_func(model,p,T,z₀,vref,x,λ₀)
     G_g(x) = Solvers.gradient(G,x)
     G_h(x) = Solvers.hessian(G,x)
 
@@ -841,26 +841,26 @@ function HELD_impl(model,p,T,z₀,
 	ub = 1.0 - lb
 	lbrho = 1.0e-6
 	ubrho = 15.0
-    projHELD(x) = ProjectionHELD(x,lb,ub,lbrho,ubrho)
-	cnstHELD(x,s) = ConstraintsHELD(x,lb,ub,lbrho,ubrho,s)
+    projGIBBS(x) = ProjectionGIBBS(x,lb,ub,lbrho,ubrho)
+	cnstGIBBS(x,s) = ConstraintsGIBBS(x,lb,ub,lbrho,ubrho,s)
  	x₀ = append!(deepcopy(z₀[1:nc-1]),ρ₀)
     G₀ = G(x₀)
     if verbose == true
-    		println("HELD Step 1 - Initialisation:")
-    		println("HELD Step 1 - UBDⱽ = $(G₀)")
-    		println("HELD Step 1 - λ₀ = $(λ₀)")
+    		println("GIBBS Step 1 - Initialisation:")
+    		println("GIBBS Step 1 - UBDⱽ = $(G₀)")
+    		println("GIBBS Step 1 - λ₀ = $(λ₀)")
     end
-    xi = HELD_initial_compositions(model,p,T,z₀,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess)
+    xi = initial_compositions(model,p,T,z₀,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess)
     fmins = Vector{Float64}(undef,0)
     xmins = Vector{Vector{Float64}}(undef,0)
     for ix = 1:length(xi)
-		ρi = HELD_density(model,p,T,xi[ix],vref)
+		ρi = GIBBS_density(model,p,T,xi[ix],vref)
 		xρi = append!(deepcopy(xi[ix][1:nc-1]),ρi)
-    	xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(G, G_g, G_h, projHELD,cnstHELD, xρi, max_trust_region_iters, tol, false)
+    	xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(G, G_g, G_h, projGIBBS,cnstGIBBS, xρi, max_trust_region_iters, tol, false)
     
 	#	if verbose == true
-    #    	println("HELD Step 3 - IPₓᵥ solve, fmin = $(fmin) error = $(error) iter = $(iter)")
-	#		println("HELD Step 3 - IPₓᵥ solve, xmin = $(xmin) check = $(check)")
+    #    	println("GIBBS Step 3 - IPₓᵥ solve, fmin = $(fmin) error = $(error) iter = $(iter)")
+	#		println("GIBBS Step 3 - IPₓᵥ solve, xmin = $(xmin) check = $(check)")
     #	end 
     	
 		# we add fmin < G₀ as we are searching for instability
@@ -870,7 +870,7 @@ function HELD_impl(model,p,T,z₀,
     	end
     end
     
-    fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol, verbose)
+    fmins_unique, xmins_unique, stable = GIBBS_clean_local_solutions(G₀, x₀, fmins, xmins, tol, verbose)
 
 	#=
 	# with the unique solution ensure the rho solution is correct based on rho solver this needs a fmin update
@@ -882,51 +882,51 @@ function HELD_impl(model,p,T,z₀,
 			sumx += xu[ix]
 		end
 		xu[nc] = 1.0 - sumx
-		ρu = HELD_density(model,p,T,xu,vref)
+		ρu = GIBBS_density(model,p,T,xu,vref)
 		xmins_unique[iu][nc] = ρu
 		fmins_unique[iu] = G(xmins_unique[iu])
 	end
 	=#
 
     if verbose == true
-    		println("HELD Step 1 - Phase stability check completed: $(length(fmins_unique)) unique solutions found")
+    		println("GIBBS Step 1 - Phase stability check completed: $(length(fmins_unique)) unique solutions found")
     end
     if stable
         # return starting solution as it is stable
         if verbose == true
-        	println("HELD Step 1 - Fluid is stable")
+        	println("GIBBS Step 1 - Fluid is stable")
     	end
     	if verbose == true
-			println("HELD Step 6 - Complete")
-			println("HELD Step 6 - Phase found 1")
-			println("HELD Step 6 - Phase moles:")
-			println("HELD Step 6 - Phase beta(1) = 1")
-			println("HELD Step 6 - Phase mole fraction:")
-			println("HELD Step 6 - Phase x(1) = $(z₀)")
-			println("HELD Step 6 - Phase volumes:")
-			println("HELD Step 6 - Phase volume(1) = $(v₀)")
-			println("HELD Step 6 - Minimum Gibbs Energy = $(G₀)")
+			println("GIBBS Step 6 - Complete")
+			println("GIBBS Step 6 - Phase found 1")
+			println("GIBBS Step 6 - Phase moles:")
+			println("GIBBS Step 6 - Phase beta(1) = 1")
+			println("GIBBS Step 6 - Phase mole fraction:")
+			println("GIBBS Step 6 - Phase x(1) = $(z₀)")
+			println("GIBBS Step 6 - Phase volumes:")
+			println("GIBBS Step 6 - Phase volume(1) = $(v₀)")
+			println("GIBBS Step 6 - Minimum Gibbs Energy = $(G₀)")
     	end
     	return  [1.0], [z₀], [v₀], G₀
     else
         # return unique solutions, these need to be added to M and are good initial guesses for phases
         if verbose == true
-            println("HELD Step 1 - Fluid is unstable, search for phases begins")
-            println("HELD Step 1 - Initialise set ℳ used for OPₓᵥ , and ℳguess used for local minimisations in IPₓᵥ")
+            println("GIBBS Step 1 - Fluid is unstable, search for phases begins")
+            println("GIBBS Step 1 - Initialise set ℳ used for OPₓᵥ , and ℳguess used for local minimisations in IPₓᵥ")
     	end
     	
         # for cutting plane we are working on the Gibbs surface so λ is zero
         λi = fill(0.,nc-1)
-        Gi(x) = HELD_func(model,p,T,z₀,vref,x,λi)
+        Gi(x) = GIBBS_func(model,p,T,z₀,vref,x,λi)
         
         # set up inital ℳ used for OPₓᵥ
         # ℳi is [xi[1:nc-1], Vref/Vi, Gi]
     	ℳ = Vector{Vector{Float64}}(undef,0)
-		xm = HELD_Pereira_compositions(model,p,T,z₀)
+		xm = Pereira_compositions(model,p,T,z₀)
 		# set up initial ℳ set
 		# add initial guesses and the newly found minimums from first iteration stability check
 		for im = 1:length(xm)
-			ρm = HELD_density(model,p,T,xm[im],vref)
+			ρm = GIBBS_density(model,p,T,xm[im],vref)
 		#	xρm = append!(deepcopy(xm[im][1:nc-1]),ρm)
     	#	xρGim = append!(deepcopy(xρm),Gi(xρm))
 			xρm = append!(xm[im][1:nc-1],ρm)
@@ -934,7 +934,7 @@ function HELD_impl(model,p,T,z₀,
     		push!(ℳ,xρGim)
     	end
 		for ii = 1:length(xi)
-			ρi = HELD_density(model,p,T,xi[ii],vref)
+			ρi = GIBBS_density(model,p,T,xi[ii],vref)
 		#	xρi = append!(deepcopy(xi[ii][1:nc-1]),ρi)
     	#	xρGii = append!(deepcopy(xρi),Gi(xρi))
 			xρi = append!(xi[ii][1:nc-1],ρi)
@@ -951,7 +951,7 @@ function HELD_impl(model,p,T,z₀,
         # ℳguessi is [xi[1:nc-1], Vref/Vi, Gi]
 		ℳguess = Vector{Vector{Float64}}(undef,0)
 		for ii = 1:length(xi)
-			ρi = HELD_density(model,p,T,xi[ii],vref)
+			ρi = GIBBS_density(model,p,T,xi[ii],vref)
 		#	xρi = append!(deepcopy(xi[ii][1:nc-1]),ρi)
 		#	xρGii = append!(deepcopy(xρi),Gi(xρi))
 			xρi = append!(xi[ii][1:nc-1],ρi)
@@ -985,14 +985,14 @@ function HELD_impl(model,p,T,z₀,
     	λStalling_count = 0
 
     	np = 1
-    	HELD_complete = false
-    	xHELD = Vector{Float64}(undef,0)
+    	GIBBS_complete = false
+    	xGIBBS = Vector{Float64}(undef,0)
     	
-    	for k = 1:max_HELD_iters
+    	for k = 1:max_GIBBS_iters
 
         	if verbose == true
-        		println("HELD Step 2 - iteration $(k)")
-            	println("HELD Step 2 - Solve OPₓᵥ for new λˢ")
+        		println("GIBBS Step 2 - iteration $(k)")
+            	println("GIBBS Step 2 - Solve OPₓᵥ for new λˢ")
     		end
     		
 			#=
@@ -1082,7 +1082,7 @@ function HELD_impl(model,p,T,z₀,
 				λmax = 1.3*λnorm
 				limit_λs_by_bounds = true
 				if verbose == true
-					println("HELD Step 3 - λ bounds added to OPₓᵥ")
+					println("GIBBS Step 3 - λ bounds added to OPₓᵥ")
 				end
 			end
 
@@ -1094,7 +1094,7 @@ function HELD_impl(model,p,T,z₀,
 			if k > 2*nc && limit_λs_by_bounds
 				limit_λs_by_bounds = false
 				if verbose == true
-					println("HELD Step 3 - λ bounds removed from OPₓᵥ")
+					println("GIBBS Step 3 - λ bounds removed from OPₓᵥ")
 				end
 			end
 
@@ -1102,16 +1102,16 @@ function HELD_impl(model,p,T,z₀,
 		#	λᵁ = fill( λmax,nc-1)
 
 			if verbose == true
-    			println("HELD Step 2 - Update UBDⱽ and λˢ from OPₓᵥ: UBDⱽ = $(UBDⱽ)")
-        		println("HELD Step 2 - λˢ = $(λˢ)")
-				println("HELD Step 2 - λnorm = $(λnorm) λmax = $(λmax)")
+    			println("GIBBS Step 2 - Update UBDⱽ and λˢ from OPₓᵥ: UBDⱽ = $(UBDⱽ)")
+        		println("GIBBS Step 2 - λˢ = $(λˢ)")
+				println("GIBBS Step 2 - λnorm = $(λnorm) λmax = $(λmax)")
     		end
     		
     		Dλ = λˢ .- λ₀
 			λStalling = false
-    		if norm(Dλ,Inf) < HELD_tol
+    		if norm(Dλ,Inf) < GIBBS_tol
     		    if verbose == true
-        			println("HELD Step 2 - λˢ has stalled use random inital guesses to provide a chance to converge")
+        			println("GIBBS Step 2 - λˢ has stalled use random inital guesses to provide a chance to converge")
     			end
 				λStalling = true
 				λStalling_count += 1
@@ -1121,9 +1121,9 @@ function HELD_impl(model,p,T,z₀,
     		end
 
     	    if verbose == true
-        		println("HELD Step 3 - IPₓᵥ solve, generate cutting plane with λˢ")
+        		println("GIBBS Step 3 - IPₓᵥ solve, generate cutting plane with λˢ")
     		end
-    		Gˢ(x) = HELD_func(model,p,T,z₀,vref,x,λˢ)
+    		Gˢ(x) = GIBBS_func(model,p,T,z₀,vref,x,λˢ)
     		Gˢ_g(x) = Solvers.gradient(Gˢ, x)
     		Gˢ_h(x) = Solvers.hessian(Gˢ, x)
     		
@@ -1131,11 +1131,11 @@ function HELD_impl(model,p,T,z₀,
     		xmins = Vector{Vector{Float64}}(undef,0)
     			
     		for ix = 1:length(ℳguess)
-    			xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gˢ, Gˢ_g, Gˢ_h, projHELD, cnstHELD, ℳguess[ix][1:nc], max_trust_region_iters, tol, false)
+    			xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gˢ, Gˢ_g, Gˢ_h, projGIBBS, cnstGIBBS, ℳguess[ix][1:nc], max_trust_region_iters, tol, false)
     			
    			#	if verbose == true
-        	#		println("HELD Step 3 - IPₓᵥ solve, fmin = $(fmin) error = $(error) iter = $(iter)")
-			#		println("HELD Step 3 - IPₓᵥ solve, xmin = $(xmin)")
+        	#		println("GIBBS Step 3 - IPₓᵥ solve, fmin = $(fmin) error = $(error) iter = $(iter)")
+			#		println("GIBBS Step 3 - IPₓᵥ solve, xmin = $(xmin)")
  	  		#	end
 				
 				if fmin <= (UBDⱽ + max(tol*0.1, eps(Float64))) && check == false
@@ -1145,7 +1145,7 @@ function HELD_impl(model,p,T,z₀,
 
     		end
 		
-			fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol, verbose)
+			fmins_unique, xmins_unique, stable = GIBBS_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol, verbose)
 			
 			if length(fmins_unique) < 1 || λStalling
 				use_global_solution = true
@@ -1154,9 +1154,9 @@ function HELD_impl(model,p,T,z₀,
 			end
 			
 			if verbose == true
-        		println("HELD Step 3 - IPₓᵥ solve unique, $(length(fmins_unique)) unique solutions found")
-			#	println("HELD Step 3 - IPₓᵥ solve unique, fmin = $(fmins_unique)")
-			#	println("HELD Step 3 - IPₓᵥ solve unique, xmin = $(xmins_unique)")
+        		println("GIBBS Step 3 - IPₓᵥ solve unique, $(length(fmins_unique)) unique solutions found")
+			#	println("GIBBS Step 3 - IPₓᵥ solve unique, fmin = $(fmins_unique)")
+			#	println("GIBBS Step 3 - IPₓᵥ solve unique, xmin = $(xmins_unique)")
     		end
     		
     		ℒ = Vector{Vector{Float64}}(undef,0)
@@ -1172,7 +1172,7 @@ function HELD_impl(model,p,T,z₀,
 						sumx += xu[ix]
 					end
 					xu[nc] = 1.0 - sumx
-					ρu = HELD_density(model,p,T,xu,vref)
+					ρu = GIBBS_density(model,p,T,xu,vref)
 					xmins_unique[iu][nc] = ρu
 					fmins_unique[iu] = Gˢ(xmins_unique[iu])
 				end
@@ -1196,7 +1196,7 @@ function HELD_impl(model,p,T,z₀,
 				end
 				
 				if verbose == true
-        			println("HELD Step 3 - ℒ set contains $(length(ℒ)) items")
+        			println("GIBBS Step 3 - ℒ set contains $(length(ℒ)) items")
   				end
 				
 			end
@@ -1204,7 +1204,7 @@ function HELD_impl(model,p,T,z₀,
 			solution_found = true
 			if use_global_solution
     			if verbose == true
-        			println("HELD Step 3 - IPₓᵥ Global solution required")
+        			println("GIBBS Step 3 - IPₓᵥ Global solution required")
   				end
 				iter_rand_max = 10*nc*nc
 				for iter_rand = 1:iter_rand_max
@@ -1214,16 +1214,16 @@ function HELD_impl(model,p,T,z₀,
     				end
     				sumxr = sum(xr)
     				xr ./= sumxr
-    				xr = ProjectionHELD_base(xr,lb,ub)
+    				xr = Projection(xr,lb,ub)
     				sumxr = sum(xr)
     				xr ./= sumxr
-					ρr = HELD_density(model,p,T,xr,vref)
+					ρr = GIBBS_density(model,p,T,xr,vref)
 					xρr = append!(deepcopy(xr[1:nc-1]),ρr)
 					xρGr = append!(deepcopy(xρr),Gi(xρr))
-    				xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gˢ, Gˢ_g, Gˢ_h, projHELD, cnstHELD,  xρGr[1:nc], max_trust_region_iters, tol, false)
+    				xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gˢ, Gˢ_g, Gˢ_h, projGIBBS, cnstGIBBS,  xρGr[1:nc], max_trust_region_iters, tol, false)
     				
 #    				if verbose == true
-#        				println("HELD Step 3 - IPₓᵥ solve, fmin = $(fmin) error = $(error) iter = $(iter)")
+#        				println("GIBBS Step 3 - IPₓᵥ solve, fmin = $(fmin) error = $(error) iter = $(iter)")
 #    				end
 
 					if fmin <= (UBDⱽ + max(tol*0.1, eps(Float64))) && check == false
@@ -1232,7 +1232,7 @@ function HELD_impl(model,p,T,z₀,
     				end
 				end
 				
-				fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol, verbose)
+				fmins_unique, xmins_unique, stable = GIBBS_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol, verbose)
 
 				if length(fmins_unique) > 0
 
@@ -1246,7 +1246,7 @@ function HELD_impl(model,p,T,z₀,
 							sumx += xu[ix]
 						end
 						xu[nc] = 1.0 - sumx
-						ρu = HELD_density(model,p,T,xu,vref)
+						ρu = GIBBS_density(model,p,T,xu,vref)
 						xmins_unique[iu][nc] = ρu
 						fmins_unique[iu] = Gˢ(xmins_unique[iu])
 					end
@@ -1270,7 +1270,7 @@ function HELD_impl(model,p,T,z₀,
 					end
 				
 					if verbose == true
-        				println("HELD Step 3 - Global solution - ℒ set contains $(length(ℒ)) items")
+        				println("GIBBS Step 3 - Global solution - ℒ set contains $(length(ℒ)) items")
   					end
   					
 				else
@@ -1281,18 +1281,18 @@ function HELD_impl(model,p,T,z₀,
     		if !solution_found || λStalling_count > 3
     			# return starting solution as we have no phases to add to the solution so this is the best we can do
         		if verbose == true
-        			println("HELD Step 1 - Global solution failed, its wise to check this solution")
+        			println("GIBBS Step 1 - Global solution failed, its wise to check this solution")
     			end
     			if verbose == true
-					println("HELD Step 6 - Complete")
-					println("HELD Step 6 - Phase found 1")
-					println("HELD Step 6 - Phase moles:")
-					println("HELD Step 6 - Phase beta(1) = 1")
-					println("HELD Step 6 - Phase mole fraction:")
-					println("HELD Step 6 - Phase x(1) = $(z₀)")
-					println("HELD Step 6 - Phase volumes:")
-					println("HELD Step 6 - Phase volume(1) = $(v₀)")
-					println("HELD Step 6 - Minimum Gibbs Energy = $(G₀)")
+					println("GIBBS Step 6 - Complete")
+					println("GIBBS Step 6 - Phase found 1")
+					println("GIBBS Step 6 - Phase moles:")
+					println("GIBBS Step 6 - Phase beta(1) = 1")
+					println("GIBBS Step 6 - Phase mole fraction:")
+					println("GIBBS Step 6 - Phase x(1) = $(z₀)")
+					println("GIBBS Step 6 - Phase volumes:")
+					println("GIBBS Step 6 - Phase volume(1) = $(v₀)")
+					println("GIBBS Step 6 - Minimum Gibbs Energy = $(G₀)")
     			end
     			return  [1.0], [z₀], [v₀], G₀
     		end
@@ -1300,8 +1300,8 @@ function HELD_impl(model,p,T,z₀,
 			error = UBDⱽ - LBDⱽ 
 			
 			if verbose == true
-        		println("HELD Step 3 - Update LBDⱽ from IPₓᵥ: LBDⱽ = $(LBDⱽ)")
-        		println("HELD Step 3 - UBDⱽ - LBDⱽ = $(error) and tol = $(HELD_tol)")
+        		println("GIBBS Step 3 - Update LBDⱽ from IPₓᵥ: LBDⱽ = $(LBDⱽ)")
+        		println("GIBBS Step 3 - UBDⱽ - LBDⱽ = $(error) and tol = $(GIBBS_tol)")
     		end
 			
 			bphase = Vector{Float64}(undef,length(xmins_unique[1]))
@@ -1327,13 +1327,13 @@ function HELD_impl(model,p,T,z₀,
 				end
 				betaerror = abs(1.0 - sumbeta)
 				if verbose == true
-        			println("HELD Step 3 - Test phase mole balance: error = $(betaerror) and tol =  $(sqrt(HELD_tol))")
-        			println("HELD Step 3 - Phases found: np = $(length(beta))")
+        			println("GIBBS Step 3 - Test phase mole balance: error = $(betaerror) and tol =  $(sqrt(GIBBS_tol))")
+        			println("GIBBS Step 3 - Phases found: np = $(length(beta))")
     			end
 			end
 			
 			if verbose == true
-        		println("HELD Step 3 - Test overall convergence:")
+        		println("GIBBS Step 3 - Test overall convergence:")
     		end
 			
 			np = length(beta)
@@ -1346,16 +1346,16 @@ function HELD_impl(model,p,T,z₀,
 			end
 			sumbeta = sum(beta[1:np-1])
 			beta[np] = 1.0 - sumbeta
-			if error < HELD_tol && betaerror < sqrt(HELD_tol)
-		#	if error < HELD_tol
+			if error < GIBBS_tol && betaerror < sqrt(GIBBS_tol)
+		#	if error < GIBBS_tol
 
 				if verbose == true
-				    println("HELD Step 4 - Error within tolerences on UBDⱽ - LBDⱽ and phase mole balance")
-        			println("HELD Step 4 - solution accepted")
+				    println("GIBBS Step 4 - Error within tolerences on UBDⱽ - LBDⱽ and phase mole balance")
+        			println("GIBBS Step 4 - solution accepted")
     			end
 
 	   			# normalise the solution before we do the Gibbs minimisation step.
-	   			# its essential that xHELD moles balances and is a feasible solution
+	   			# its essential that xGIBBS moles balances and is a feasible solution
 	
 	   			phasemoles = Vector{Vector{Float64}}(undef,0)
 	   			for ic = 1:nc-1			
@@ -1406,25 +1406,25 @@ function HELD_impl(model,p,T,z₀,
 						sumx += xu[ix]
 					end
 					xu[nc] = 1.0 - sumx
-					ρu = HELD_density(model,p,T,xu,vref)
+					ρu = GIBBS_density(model,p,T,xu,vref)
 					xmins_unique[iu][nc] = ρu
 				end
 				=#
 				
 	   			for ip = 1:np-1
-    				push!(xHELD,beta[ip])
+    				push!(xGIBBS,beta[ip])
     				for ic = 1:nc
-    					push!(xHELD,xmins_unique[ip][ic])
+    					push!(xGIBBS,xmins_unique[ip][ic])
     				end
     			end
-    			push!(xHELD,xmins_unique[np][nc])
+    			push!(xGIBBS,xmins_unique[np][nc])
 
-    			HELD_complete = true
+    			GIBBS_complete = true
 				break
 			end
     		
     		if verbose == true
-				println("HELD Step 3 - Add new (x,V)s: ℒs to the ℳ set and all current minimums to the ℳguess set")
+				println("GIBBS Step 3 - Add new (x,V)s: ℒs to the ℳ set and all current minimums to the ℳguess set")
     		end
 
 			use_only_lowest_min = false
@@ -1457,36 +1457,36 @@ function HELD_impl(model,p,T,z₀,
 			n_unique_previous = length(fmins_unique)
 			
 			if verbose == true
-        		println("HELD Step 3 - Overall convergence not satisfied return to step 2")
+        		println("GIBBS Step 3 - Overall convergence not satisfied return to step 2")
     		end
 			   	
     	end
     	
-    	if !HELD_complete
-    	# we made it here without a HELD solution just return single phase and warn 	
+    	if !GIBBS_complete
+    	# we made it here without a GIBBS solution just return single phase and warn 	
     		if verbose == true
-				println("HELD Step 5 - No solutions found")
-				println("HELD Step 5 - Warning: fluid is being flagged as stable: try increasing max HELD iterations if this is a large component set problem")
-				println("HELD Step 5 - Phase found 1")
-				println("HELD Step 5 - Phase moles:")
-				println("HELD Step 5 - Phase beta(1) = 1")
-				println("HELD Step 5 - Phase mole fraction:")
-				println("HELD Step 5 - Phase x(1) = $(z₀)")
-				println("HELD Step 5 - Phase volumes:")
-				println("HELD Step 5 - Phase volume(1) = $(v₀)")
-				println("HELD Step 5 - Minimum Gibbs Energy = $(G₀)")
+				println("GIBBS Step 5 - No solutions found")
+				println("GIBBS Step 5 - Warning: fluid is being flagged as stable: try increasing max GIBBS iterations if this is a large component set problem")
+				println("GIBBS Step 5 - Phase found 1")
+				println("GIBBS Step 5 - Phase moles:")
+				println("GIBBS Step 5 - Phase beta(1) = 1")
+				println("GIBBS Step 5 - Phase mole fraction:")
+				println("GIBBS Step 5 - Phase x(1) = $(z₀)")
+				println("GIBBS Step 5 - Phase volumes:")
+				println("GIBBS Step 5 - Phase volume(1) = $(v₀)")
+				println("GIBBS Step 5 - Minimum Gibbs Energy = $(G₀)")
     		end
     		return  [1.0], [z₀], [v₀], G₀
     	else
-    		# we made it here with a HELD solution use Gibbs Energy Minimisation to polish the solution this normally takes 2 to 3 iterations as we are close to the solution.
+    		# we made it here with a GIBBS solution use Gibbs Energy Minimisation to polish the solution this normally takes 2 to 3 iterations as we are close to the solution.
 			if verbose == true
-				println("HELD Step 5 - Start Gibbs Energy Minimisation:")
+				println("GIBBS Step 5 - Start Gibbs Energy Minimisation:")
 			end
 			
 			# xsol contains all the phases xgibbs works on np-1 phases and completes the missing phase via the mole balance.
 			# to be sure we must make xgibbs feasible, no negatives and no greater than 1 values.
 			
-			Gibbs(x) = HELD_Gibbs_func(model,p,T,z₀,vref,np,x)
+			Gibbs(x) = Gibbs_func(model,p,T,z₀,vref,np,x)
 			Gibbs_g(x) = Solvers.gradient(Gibbs, x)
 			Gibbs_h(x) = Solvers.hessian(Gibbs, x)
 
@@ -1510,7 +1510,7 @@ function HELD_impl(model,p,T,z₀,
 				push!(ub,15.0)
 			end
 			push!(ub,15.0)
-			projGibbs(x) = ProjectionHELD_base(x,lb,ub)
+			projGibbs(x) = Projection(x,lb,ub)
 			cnstGibbs(x,s) = Constraints(x,lb,ub,s)
 			=#
 
@@ -1519,23 +1519,23 @@ function HELD_impl(model,p,T,z₀,
 			lbrho = 1.0e-6
 			ubrho = 15.0
 			
-			projGibbs(x) = ProjectionHELD_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho)
-			cnstGibbs(x,s) = ConstraintsHELD_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho,s)
+			projGibbs(x) = ProjectionGibbs(x,np,z₀,lb,ub,lbrho,ubrho)
+			cnstGibbs(x,s) = ConstraintsGibbs(x,np,z₀,lb,ub,lbrho,ubrho,s)
 			
-			xsol,Gsol,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gibbs, Gibbs_g, Gibbs_h, projGibbs, cnstGibbs, xHELD, max_trust_region_iters, tol, false)
+			xsol,Gsol,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gibbs, Gibbs_g, Gibbs_h, projGibbs, cnstGibbs, xGIBBS, max_trust_region_iters, tol, false)
 			
 			if verbose == true
-				println("HELD Step 5 - Gibbs Energy Minimisation: iterations taken = $(iter)")
-				println("HELD Step 5 - Gibbs Energy Minimisation: error = $(error) - tol = $(tol)")
+				println("GIBBS Step 5 - Gibbs Energy Minimisation: iterations taken = $(iter)")
+				println("GIBBS Step 5 - Gibbs Energy Minimisation: error = $(error) - tol = $(tol)")
 				if check
-					println("HELD Step 5 - Gibbs Energy Minimisation: did not converge to required tolerance")
-					if error < HELD_tol && iter < max_trust_region_iters
-						println("HELD Step 5 - Gibbs Energy Minimisation: solution accepted as this is less than HELD tolerence $(HELD_tol)")
+					println("GIBBS Step 5 - Gibbs Energy Minimisation: did not converge to required tolerance")
+					if error < GIBBS_tol && iter < max_trust_region_iters
+						println("GIBBS Step 5 - Gibbs Energy Minimisation: solution accepted as this is less than GIBBS tolerence $(GIBBS_tol)")
 					else
-						println("HELD Step 5 - Gibbs Energy Minimisation: not converged")
+						println("GIBBS Step 5 - Gibbs Energy Minimisation: not converged")
 					end
 				else
-					println("HELD Step 5 - Gibbs Energy Minimisation: solution found")
+					println("GIBBS Step 5 - Gibbs Energy Minimisation: solution found")
 				end
 			end
 			
@@ -1572,7 +1572,7 @@ function HELD_impl(model,p,T,z₀,
 			push!(xp,xc)
 			
 			if verbose == true
-				println("HELD Step 5 - Gibbs Energy Minimisation: Normalise final solution so it mole balances")
+				println("GIBBS Step 5 - Gibbs Energy Minimisation: Normalise final solution so it mole balances")
 			end
 			# normalise the solution before we finish.
 		   	phasemoles = Vector{Vector{Float64}}(undef,0)
@@ -1599,7 +1599,7 @@ function HELD_impl(model,p,T,z₀,
 				for ic = 1:nc-1
 					xp[ip][ic] = phasemoles[ic][ip] / beta[ip];
 				end
-				ρp = HELD_density(model,p,T,xp[ip],vref)
+				ρp = GIBBS_density(model,p,T,xp[ip],vref)
 				vp[ip] = vref/ρp
 			end
 			# end of 
@@ -1627,21 +1627,21 @@ function HELD_impl(model,p,T,z₀,
 			end
 			
 			if verbose == true
-				println("HELD Step 5 - Complete")
-				println("HELD Step 6 - Phases found $(length(betas))")
-				println("HELD Step 6 - Phase moles:")
+				println("GIBBS Step 5 - Complete")
+				println("GIBBS Step 6 - Phases found $(length(betas))")
+				println("GIBBS Step 6 - Phase moles:")
 				for ip = 1:length(betas)
-					println("HELD Step 6 - Phase beta[$(ip)] = $(betas[ip])")
+					println("GIBBS Step 6 - Phase beta[$(ip)] = $(betas[ip])")
 				end
-				println("HELD Step 6 - Phase mole fraction:")
+				println("GIBBS Step 6 - Phase mole fraction:")
 				for ip = 1:length(betas)
-					println("HELD Step 6 - Phase x[$(ip)] = $(xps[ip])")
+					println("GIBBS Step 6 - Phase x[$(ip)] = $(xps[ip])")
 				end
-				println("HELD Step 6 - Phase volumes:")
+				println("GIBBS Step 6 - Phase volumes:")
 				for ip = 1:length(betas)
-					println("HELD Step 6 - Phase volume[$(ip)] = $(vps[ip])")
+					println("GIBBS Step 6 - Phase volume[$(ip)] = $(vps[ip])")
 				end
-				println("HELD Step 6 - Minimum Gibbs Energy = $(Gsol)")
+				println("GIBBS Step 6 - Minimum Gibbs Energy = $(Gsol)")
 			end
 			
 			return betas,xps,vps,Gsol
@@ -1652,7 +1652,7 @@ function HELD_impl(model,p,T,z₀,
     
 end
 
-function HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol, verbose)
+function GIBBS_clean_local_solutions(G₀, x₀, fmins, xmins, tol, verbose)
     iremove = fill(false,length(fmins))
     iminfound = fill(false,length(fmins))
     for ir = 1:length(fmins)    	
@@ -1704,4 +1704,4 @@ function HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol, verbose)
     return fmins_unique, xmins_unique, stable
 end
 
-export HELDTPFlash
+export GIBBSTPFlash
