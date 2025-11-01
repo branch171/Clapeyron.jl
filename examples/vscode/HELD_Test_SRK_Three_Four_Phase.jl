@@ -11,19 +11,25 @@ T = 5+273.15
 z=ones(length(model))/length(model)
 
 verbose = true
-xp,beta,vp,Gsol = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(add_random_guess = true, verbose = verbose))
+HELDflash = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(add_random_guess = true, verbose = verbose))
 
+beta = HELDflash.fractions
+xp = HELDflash.compositions
+vp = HELDflash.volumes
+Gsol =  HELDflash.data.g
+
+verbose = false
 if !verbose
     for ip in eachindex(beta)
-        println("Phase beta[$(ip)[] = $(beta[ip])")
+        println("Phase beta[$(ip)] = $(beta[ip])")
     end
     println("Phase mole fraction:")
     for ip in eachindex(beta)
-        println("Phase x[$(ip)[] = $(xp[ip])")
+        println("Phase x[$(ip)] = $(xp[ip])")
     end
     println("Phase volumes:")
     for ip in eachindex(beta)
-        println("Phase volume[$(ip)[] = $(vp[ip])")
+        println("Phase volume[$(ip)] = $(vp[ip])")
     end
     println("Minimum Gibbs Energy = $(Gsol)")
 end

@@ -69,7 +69,7 @@ end
 
 # new HELD
 
-function ConstraintsHELD(x,lb,ub,lbrho,ubrho,s)
+function HELDConstraints(x,lb,ub,lbrho,ubrho,s)
     n = size(x)[1]
 	xp = Vector{Base.promote_eltype(x,lb,ub,s)}(undef,n)
 	
@@ -97,7 +97,7 @@ function ConstraintsHELD(x,lb,ub,lbrho,ubrho,s)
 
 end
 
-function ConstraintsHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho,s)
+function HELDConstraints_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho,s)
     n = size(x)[1]
 	xs = Vector{Base.promote_eltype(x)}(undef,n)
 	
@@ -165,7 +165,7 @@ function ConstraintsHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho,s)
 
 end
 
-function ProjectionHELD(x,lb,ub,lbrho,ubrho)
+function HELDProjection(x,lb,ub,lbrho,ubrho)
     n = size(x)[1]
     p = Vector{Base.promote_eltype(x)}(undef,n)
     xp = Vector{Base.promote_eltype(x)}(undef,n)
@@ -202,7 +202,7 @@ function ProjectionHELD(x,lb,ub,lbrho,ubrho)
     return p
 end
 
-function ProjectionHELD_base(x,lb,ub)
+function HELDProjection_base(x,lb,ub)
     n = size(x)[1]
     p = Vector{Base.promote_eltype(x)}(undef,n)
     for i = 1:n
@@ -217,7 +217,7 @@ function ProjectionHELD_base(x,lb,ub)
     return p
 end
 
-function ProjectionHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
+function HELDProjection_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
 	n = size(x)[1]
     p = Vector{Base.promote_eltype(x)}(undef,0)
 	nc = length(n₀)
@@ -225,7 +225,7 @@ function ProjectionHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
 	xp = Vector{Vector{eltype(x)}}(undef,0)
     rhop = Vector{eltype(x)}(undef,0)
 
-#	println("ProjectionHELD_Gibbs x  = $(x)")
+#	println("HELDProjection_Gibbs x  = $(x)")
 
     ix = 0
     for ip=1:np-1
@@ -285,10 +285,10 @@ function ProjectionHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
 		end
 	end
 
-#	println("ProjectionHELD_Gibbs outside  = $(outside)")
-#	println("ProjectionHELD_Gibbs beta  = $(beta)")
-#	println("ProjectionHELD_Gibbs xp  = $(xp)")
-#	println("ProjectionHELD_Gibbs rhop  = $(rhop)")
+#	println("HELDProjection_Gibbs outside  = $(outside)")
+#	println("HELDProjection_Gibbs beta  = $(beta)")
+#	println("HELDProjection_Gibbs xp  = $(xp)")
+#	println("HELDProjection_Gibbs rhop  = $(rhop)")
 
 	if outside
 		# normalise after bounds check
@@ -350,196 +350,12 @@ function ProjectionHELD_Gibbs(x,np,n₀,lb,ub,lbrho,ubrho)
 		end
 		push!(p,xp[np][nc])
 
-#		println("ProjectionHELD_Gibbs p  = $(p)")
+#		println("HELDProjection_Gibbs p  = $(p)")
 
 		return p
 	else
 		return x
 	end
-end
-
-function HELD_func_rho(model,p,T,x₀,vref,rho)
-    v = vref/rho
-    A = eos(model,v,T,x₀)
-    f = (A + p*v)/R̄/T
-    return f
-end
-
-function HELD_func_p(model,p₀,T,x₀,vref,rho)
-    v = vref/rho
-	p,dpdV = p∂p∂V(model,v,T,x₀)
-    return p₀ - p
-end
-
-function HELD_func_dpdV(model,T,x₀,vref,rho)
-    v = vref/rho
-	p,dpdV = p∂p∂V(model,v,T,x₀)
-    return dpdV
-end
-
-#=
-function HELD_volume1(model,p,T,x₀,vref,rho)
-	G(x) = HELD_func_rho(model,p,T,[x,1.0-x],vref,rho) + 5.474135924873183*(0.95 - x)
-    dG(x) = Solvers.derivative(G,x)
-	ddG(x) = Solvers.derivative(dG,x)
-    return G(x₀), dG(x₀), ddG(x₀)
-end
-
-function HELD_volume2(model,p,T,x₀,vref,rho)
-	G(x) = HELD_func_rho(model,p,T,x₀,vref,x)
-	dG(x) = HELD_func_p(model,p,T,x₀,vref,x)
-	ddG(x) = HELD_func_dpdV(model,T,x₀,vref,x)
-    return G(rho), dG(rho), ddG(rho)
-end
-
-function HELD_volume(model,p,T,x₀)
-	pure = split_pure_model(model)
-	crit = crit_pure.(pure)
-	vref = 0.0
-	for i = 1:length(x₀)
-    	Tc,pc,vc = crit[i]
-    	vref += x₀[i]*vc
-	end
-	v₀ = HELD_density(model,p,T,x₀,vref)
-	return vref/v₀
-end
-=#
-
-function HELD_density(model,p,T,x₀,vref)
-
-	G(x) = HELD_func_rho(model,p,T,x₀,vref,x)
-	dG(x) = HELD_func_p(model,p,T,x₀,vref,x)
-	ddG(x) = HELD_func_dpdV(model,T,x₀,vref,x)
-	
-	# calculate rho_ideal
-	rho_ideal = vref/(R̄*T/p)
-	rho_min = 1.0e-6
-	rho_max = 15.0
-
-	drho = rho_ideal/2.0
-	if drho < rho_min
-		rho_min = drho
-		drho = 2.0*rho_min
-	else
-		drho = (rho_min + rho_ideal)/2.0
-	end
-
-	rho1 = rho_min
-	rho2 = rho1+drho
-	if abs(dG(rho2)) < sqrt(eps(Float64))
-		rho2 += drho
-	end
-
-	rho_bracket = Vector{Vector{Float64}}(undef,0)
-	while rho2 <= rho_max
-		if ddG(rho1)*ddG(rho2) < 0.0
-			push!(rho_bracket,[rho1,rho2])
-		end
-		if rho1 >= 0.01
-			drho = 0.01
-		end
-		rho1=rho2
-		rho2=rho1+drho
-		if abs(ddG(rho2)) < sqrt(eps(Float64))
-			rho2 += drho
-		end
-	end
-
-#	println("rho_bracket  = $(rho_bracket)")
-
-	rho_spinodial = Vector{Float64}(undef,0)
-	for ib = eachindex(rho_bracket)
-		ans = Roots.find_zero(ddG, rho_bracket[ib])
-		for ia = eachindex(ans)
-			push!(rho_spinodial,ans[ia])
-		end
-	end
-
-	rho_sp_low = rho_min
-	rho_sp_high = rho_max
-
-	if length(rho_spinodial) > 1
-		rho_sp_low = rho_spinodial[1]
-		rho_sp_high = rho_spinodial[end]
-	end
-
-#	println("rho_spinodial  = $(rho_spinodial)")
-#	println("rho_sp_low  = $(rho_sp_low)")
-#	println("rho_sp_high  = $(rho_sp_high)")
-
-	drho = rho_ideal/2.0
-	if drho < rho_min
-		rho_min = drho
-		drho = 2.0*rho_min
-	else
-		drho = (rho_min + rho_ideal)/2.0
-	end
-
-	rho1 = rho_min
-	rho2 = rho1+drho
-	if abs(dG(rho2)) < sqrt(eps(Float64))
-		rho2 += drho
-	end
-
-	rho_bracket = Vector{Vector{Float64}}(undef,0)
-	while rho2 <= rho_max
-		if dG(rho1)*dG(rho2) < 0.0
-			push!(rho_bracket,[rho1,rho2])
-		end
-		if rho1 >= 0.01
-			drho = 0.01
-		end
-		rho1=rho2
-		rho2=rho1+drho
-		if abs(dG(rho2)) < sqrt(eps(Float64))
-			rho2 += drho
-		end
-	end
-
-#	println("rho_bracket  = $(rho_bracket)")
-
-	rho_found = Vector{Float64}(undef,0)
-	for ib = eachindex(rho_bracket)
-		ans = Roots.find_zero(dG, rho_bracket[ib])
-		for ia = eachindex(ans)
-			stab = ddG(ans[ia])
-		#	if stab > 0.0
-			if stab < 0.0
-				push!(rho_found,ans[ia])
-			end
-		end
-	end
-
-#	println("rho_found  = $(rho_found)")
-
-	rho_stable_set = Vector{Float64}(undef,0)
-	if length(rho_found) > 1
-		if length(rho_spinodial) > 1
-			if rho_found[1] < rho_sp_low
-				push!(rho_stable_set,rho_found[1])
-			end
-			if rho_found[end] > rho_sp_high
-				push!(rho_stable_set,rho_found[end])
-			end
-		else
-			push!(rho_stable_set,rho_found[1])
-		#	push!(rho_stable_set,rho_found[end])
-		end
-	else
-		push!(rho_stable_set,rho_found[1])
-	end
-
-#	println("rho_stable_set  = $(rho_stable_set)")
-
-	rho_stable = rho_stable_set[1]
-	if length(rho_stable_set) > 1
-		if G(rho_stable_set[end]) < G(rho_stable)
-			rho_stable = rho_stable_set[end]
-		end
-	end
-
-	return rho_stable
-
 end
 
 function HELD_func(model,p,T,n₀,v₀,x,λ)
@@ -614,7 +430,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     xvap = z.*K
     sumxvap = sum(xvap)
     xvap ./= sumxvap
-    xvap = ProjectionHELD_base(xvap,lb,ub)
+    xvap = HELDProjection_base(xvap,lb,ub)
     sumxvap = sum(xvap)
     xvap ./= sumxvap
     push!(xp,xvap)
@@ -622,7 +438,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     xliq = z./K
     sumxliq = sum(xliq)
     xliq ./= sumxliq
-    xliq = ProjectionHELD_base(xliq,lb,ub)
+    xliq = HELDProjection_base(xliq,lb,ub)
     sumxliq = sum(xliq)
     xliq ./= sumxliq
     push!(xp,xliq)
@@ -632,14 +448,14 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     xvap = z.*Kn
     sumxvap = sum(xvap)
     xvap ./= sumxvap
-    xvap = ProjectionHELD_base(xvap,lb,ub)
+    xvap = HELDProjection_base(xvap,lb,ub)
     sumxvap = sum(xvap)
     xvap ./= sumxvap
     push!(xp,xvap)
     xliq = z./Kn
     sumxliq = sum(xliq)
     xliq ./= sumxliq
-    xliq = ProjectionHELD_base(xliq,lb,ub)
+    xliq = HELDProjection_base(xliq,lb,ub)
     sumxliq = sum(xliq)
     xliq ./= sumxliq
     push!(xp,xliq)
@@ -649,14 +465,14 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     xvap = z.*Kn
     sumxvap = sum(xvap)
     xvap ./= sumxvap
-    xvap = ProjectionHELD_base(xvap,lb,ub)
+    xvap = HELDProjection_base(xvap,lb,ub)
     sumxvap = sum(xvap)
     xvap ./= sumxvap
     push!(xp,xvap)
     xliq = z./Kn
     sumxliq = sum(xliq)
     xliq ./= sumxliq
-    xliq = ProjectionHELD_base(xliq,lb,ub)
+    xliq = HELDProjection_base(xliq,lb,ub)
     sumxliq = sum(xliq)
     xliq ./= sumxliq
     push!(xp,xliq)
@@ -684,7 +500,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
         		xi[i] = z[i]/k
         		sumxi = sum(xi)
         		xi ./= sumxi
-        		xi = ProjectionHELD_base(xi,lb,ub)
+        		xi = HELDProjection_base(xi,lb,ub)
     			sumxi = sum(xi)
     			xi ./= sumxi
         		push!(xp,xi)
@@ -695,7 +511,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     			xvap = xi.*K
     			sumxvap = sum(xvap)
     			xvap ./= sumxvap
-    			xvap = ProjectionHELD_base(xvap,lb,ub)
+    			xvap = HELDProjection_base(xvap,lb,ub)
     			sumxvap = sum(xvap)
     			xvap ./= sumxvap
     			push!(xp,xvap)
@@ -703,7 +519,7 @@ function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_gues
     			xliq = xi./K
     			sumxliq = sum(xliq)
     			xliq ./= sumxliq
-    			xliq = ProjectionHELD_base(xliq,lb,ub)
+    			xliq = HELDProjection_base(xliq,lb,ub)
     			sumxliq = sum(xliq)
     			xliq ./= sumxliq
     			push!(xp,xliq)
@@ -773,11 +589,11 @@ function HELD_Pereira_compositions(model,p,T,z)
 					x̄[j] = (1.0 - (z[i] + d[id]*(1.0 - z[i])))/(n-1)
 				end
 			end
-			x̂ = ProjectionHELD_base(x̂,lb,ub)
+			x̂ = HELDProjection_base(x̂,lb,ub)
 			sumx̂ = sum(x̂)
 			x̂ ./= sumx̂
 			push!(xp,x̂)
-			x̄ = ProjectionHELD_base(x̄,lb,ub)
+			x̄ = HELDProjection_base(x̄,lb,ub)
 			sumx̄ = sum(x̄)
 			x̄ ./= sumx̄
 			push!(xp,x̄)
@@ -817,12 +633,12 @@ function HELD_impl(model,p,T,z₀,
 #	vref = 3.35*lb_volume(model,T,z₀)
 #	println("HELD Step 1 - vref = $(vref) vref_crit = $(vref_crit)")
 
- 	ρ₀ = HELD_density(model,p,T,z₀,vref)
+ 	ρ₀ = RVS_density(model,p,T,z₀,vref)
 	v₀ = vref/ρ₀
     μ₀ = VT_chemical_potential(model,v₀,T,z₀)
     λ₀ = (μ₀[1:nc-1] .- μ₀[nc])/R̄/T
  
-	ρ₀ = HELD_density(model,p,T,z₀,vref)
+	ρ₀ = RVS_density(model,p,T,z₀,vref)
     G(x) = HELD_func(model,p,T,z₀,vref,x,λ₀)
     G_g(x) = Solvers.gradient(G,x)
     G_h(x) = Solvers.hessian(G,x)
@@ -841,8 +657,8 @@ function HELD_impl(model,p,T,z₀,
 	ub = 1.0 - lb
 	lbrho = 1.0e-6
 	ubrho = 15.0
-    projHELD(x) = ProjectionHELD(x,lb,ub,lbrho,ubrho)
-	cnstHELD(x,s) = ConstraintsHELD(x,lb,ub,lbrho,ubrho,s)
+    projHELD(x) = HELDProjection(x,lb,ub,lbrho,ubrho)
+	cnstHELD(x,s) = HELDConstraints(x,lb,ub,lbrho,ubrho,s)
  	x₀ = append!(deepcopy(z₀[1:nc-1]),ρ₀)
     G₀ = G(x₀)
     if verbose == true
@@ -854,7 +670,7 @@ function HELD_impl(model,p,T,z₀,
     fmins = Vector{Float64}(undef,0)
     xmins = Vector{Vector{Float64}}(undef,0)
     for ix = 1:length(xi)
-		ρi = HELD_density(model,p,T,xi[ix],vref)
+		ρi = RVS_density(model,p,T,xi[ix],vref)
 		xρi = append!(deepcopy(xi[ix][1:nc-1]),ρi)
     	xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(G, G_g, G_h, projHELD,cnstHELD, xρi, max_trust_region_iters, tol, false)
     
@@ -882,7 +698,7 @@ function HELD_impl(model,p,T,z₀,
 			sumx += xu[ix]
 		end
 		xu[nc] = 1.0 - sumx
-		ρu = HELD_density(model,p,T,xu,vref)
+		ρu = RVS_density(model,p,T,xu,vref)
 		xmins_unique[iu][nc] = ρu
 		fmins_unique[iu] = G(xmins_unique[iu])
 	end
@@ -926,7 +742,7 @@ function HELD_impl(model,p,T,z₀,
 		# set up initial ℳ set
 		# add initial guesses and the newly found minimums from first iteration stability check
 		for im = 1:length(xm)
-			ρm = HELD_density(model,p,T,xm[im],vref)
+			ρm = RVS_density(model,p,T,xm[im],vref)
 		#	xρm = append!(deepcopy(xm[im][1:nc-1]),ρm)
     	#	xρGim = append!(deepcopy(xρm),Gi(xρm))
 			xρm = append!(xm[im][1:nc-1],ρm)
@@ -934,7 +750,7 @@ function HELD_impl(model,p,T,z₀,
     		push!(ℳ,xρGim)
     	end
 		for ii = 1:length(xi)
-			ρi = HELD_density(model,p,T,xi[ii],vref)
+			ρi = RVS_density(model,p,T,xi[ii],vref)
 		#	xρi = append!(deepcopy(xi[ii][1:nc-1]),ρi)
     	#	xρGii = append!(deepcopy(xρi),Gi(xρi))
 			xρi = append!(xi[ii][1:nc-1],ρi)
@@ -951,7 +767,7 @@ function HELD_impl(model,p,T,z₀,
         # ℳguessi is [xi[1:nc-1], Vref/Vi, Gi]
 		ℳguess = Vector{Vector{Float64}}(undef,0)
 		for ii = 1:length(xi)
-			ρi = HELD_density(model,p,T,xi[ii],vref)
+			ρi = RVS_density(model,p,T,xi[ii],vref)
 		#	xρi = append!(deepcopy(xi[ii][1:nc-1]),ρi)
 		#	xρGii = append!(deepcopy(xρi),Gi(xρi))
 			xρi = append!(xi[ii][1:nc-1],ρi)
@@ -1172,7 +988,7 @@ function HELD_impl(model,p,T,z₀,
 						sumx += xu[ix]
 					end
 					xu[nc] = 1.0 - sumx
-					ρu = HELD_density(model,p,T,xu,vref)
+					ρu = RVS_density(model,p,T,xu,vref)
 					xmins_unique[iu][nc] = ρu
 					fmins_unique[iu] = Gˢ(xmins_unique[iu])
 				end
@@ -1214,10 +1030,10 @@ function HELD_impl(model,p,T,z₀,
     				end
     				sumxr = sum(xr)
     				xr ./= sumxr
-    				xr = ProjectionHELD_base(xr,lb,ub)
+    				xr = HELDProjection_base(xr,lb,ub)
     				sumxr = sum(xr)
     				xr ./= sumxr
-					ρr = HELD_density(model,p,T,xr,vref)
+					ρr = RVS_density(model,p,T,xr,vref)
 					xρr = append!(deepcopy(xr[1:nc-1]),ρr)
 					xρGr = append!(deepcopy(xρr),Gi(xρr))
     				xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gˢ, Gˢ_g, Gˢ_h, projHELD, cnstHELD,  xρGr[1:nc], max_trust_region_iters, tol, false)
@@ -1246,7 +1062,7 @@ function HELD_impl(model,p,T,z₀,
 							sumx += xu[ix]
 						end
 						xu[nc] = 1.0 - sumx
-						ρu = HELD_density(model,p,T,xu,vref)
+						ρu = RVS_density(model,p,T,xu,vref)
 						xmins_unique[iu][nc] = ρu
 						fmins_unique[iu] = Gˢ(xmins_unique[iu])
 					end
@@ -1406,7 +1222,7 @@ function HELD_impl(model,p,T,z₀,
 						sumx += xu[ix]
 					end
 					xu[nc] = 1.0 - sumx
-					ρu = HELD_density(model,p,T,xu,vref)
+					ρu = RVS_density(model,p,T,xu,vref)
 					xmins_unique[iu][nc] = ρu
 				end
 				=#
@@ -1510,8 +1326,8 @@ function HELD_impl(model,p,T,z₀,
 				push!(ub,15.0)
 			end
 			push!(ub,15.0)
-			projGibbs(x) = ProjectionHELD_base(x,lb,ub)
-			cnstGibbs(x,s) = Constraints(x,lb,ub,s)
+			projGibbs(x) = HELDProjection_base(x,lb,ub)
+			cnstGibbs(x,s) = HELDConstraints(x,lb,ub,s)
 			=#
 
 			lb = eps(Float64)*1e2
@@ -1519,8 +1335,8 @@ function HELD_impl(model,p,T,z₀,
 			lbrho = 1.0e-6
 			ubrho = 15.0
 			
-			projGibbs(x) = ProjectionHELD_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho)
-			cnstGibbs(x,s) = ConstraintsHELD_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho,s)
+			projGibbs(x) = HELDProjection_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho)
+			cnstGibbs(x,s) = HELDConstraints_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho,s)
 			
 			xsol,Gsol,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gibbs, Gibbs_g, Gibbs_h, projGibbs, cnstGibbs, xHELD, max_trust_region_iters, tol, false)
 			
@@ -1599,7 +1415,7 @@ function HELD_impl(model,p,T,z₀,
 				for ic = 1:nc-1
 					xp[ip][ic] = phasemoles[ic][ip] / beta[ip];
 				end
-				ρp = HELD_density(model,p,T,xp[ip],vref)
+				ρp = RVS_density(model,p,T,xp[ip],vref)
 				vp[ip] = vref/ρp
 			end
 			# end of 

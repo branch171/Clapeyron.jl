@@ -10,9 +10,17 @@ T = 5+273.15
 
 z=ones(length(model))/length(model)
 
+verbose = false
+HELDflash = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(add_random_guess = true, verbose = verbose))
 verbose = true
-xp,beta,vp,Gsol = Clapeyron.tp_flash_impl(model,p,T,z, GIBBSTPFlash(add_random_guess = true, verbose = verbose))
+GFEMflash = Clapeyron.tp_flash_impl(model,p,T,z, GFEMTPFlash(flashin = HELDflash, verbose = verbose))
 
+beta = GFEMflash.fractions
+xp = GFEMflash.compositions
+vp = GFEMflash.volumes
+Gsol =  GFEMflash.data.g
+
+verbose = false
 if !verbose
     for ip in eachindex(beta)
         println("Phase beta[$(ip)[] = $(beta[ip])")

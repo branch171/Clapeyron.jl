@@ -39,7 +39,8 @@ include("../tp_flash/RachfordRicetp_flash.jl")
 include("../tp_flash/MCFlashJL.jl")
 include("../tp_flash/multiphase.jl")
 include("../tp_flash/HELD_flash.jl")
-include("../tp_flash/GIBBSminimization_flash.jl")
+include("../tp_flash/GFEM_flash.jl")
+include("../tp_flash/RobustVolumeSolver.jl")
 
 function init_preferred_method(method::typeof(tp_flash),model::EoSModel,kwargs) 
     if length(kwargs) == 0

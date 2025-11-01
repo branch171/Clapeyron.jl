@@ -227,7 +227,7 @@ function findminimum(func::Function,ax,bx,cx,tol)
 			xm=0.5*(a+b)
       tol1=tol*abs(x)+ZEPS
 			tol2=2.0*tol1
-    #  println("abs(x-xm) = $(abs(x-xm)), tol = $((tol2-0.5*(b-a)))")
+      println("abs(x-xm) = $(abs(x-xm)), tol = $((tol2-0.5*(b-a)))")
 			if (abs(x-xm) <= (tol2-0.5*(b-a)))
 				return x, fx, iter
       end
@@ -286,7 +286,7 @@ function findminimum(func::Function,ax,bx,cx,tol)
 					fv=fu
         end
       end
-    #  println("v = $(v), w = $(w), x = $(x)")
+      println("a = $(a), x = $(x), b = $(b)")
 		end
     return x, fx, ITMAX
 end
@@ -309,3 +309,83 @@ println("xout = $(xout) -")
 vtout,htout = get_props(model,flash_result_out)
 println("Volume out = $(vtout) m3/mol")
 println("Enthalpy out = $(htout) J/mol")
+
+#=
+function brentMethod(f::Function,a,b,itermax,tol)
+    invphi = (1.0 + sqrt(5.0)) / 2.0 - 1.0
+    x = b + invphi * (a - b)
+    v = x
+    w = x
+    dold = 0.0
+    eold = 0.0
+    for iter=1:itermax
+      fv = f(v)
+      fw = f(w)
+      fx = f(x)
+      m = 0.5 * (a + b)
+      if b - a <= eps
+          return m
+      else
+          r = (x - w) * (fx - fv)
+          tq = (x - v) * (fx - fw)
+          tp = (x - v) * tq - (x - w) * r
+          tq2 = 2.0 * (tq - r)
+          p = if tq2 > 0.0 then -tp else tp
+          q = if tq2 > 0.0 then tq2 else -tq2
+          let safe = q <> 0.0
+          deltax = if safe p / q else 0.0
+          parabolic = safe && a < x + deltax && x + deltax < b && abs(deltax) < 0.5 * abs(eold)
+          e = if parabolic then dold elif x < m then b - x else a - x
+          d = if parabolic then deltax else ratio * e
+          u = x + d
+          fu = f(u)
+          if (fu <= fx)
+            if (u >= x) 
+              a=x 
+            else 
+              b=x
+            end
+            v = w
+            w = x
+            x = u
+            fv = fw
+            fw = fx
+            fx = fu
+          else
+            if (u < x) 
+              a=u 
+            else 
+              b=u
+            end
+            if (fu <= fw || w == x)
+              v=w
+              w=u
+              fv=fw
+              fw=fu
+            elseif (fu <= fv || v == x || v == w)
+              v=u
+              fv=fu
+            end
+          end
+          #=
+          if fu <= fx
+              newa = if u < x then a else x
+              newb = if u < x then x else b
+              brent newa newb w x u d e newi
+          else
+            newa = if u < x then u else a
+            newb = if u < x then b else u
+            if fu <= fw || w = x 
+              brent newa newb w u x d e newi
+            elseif fu <= fv || v = x || v = w 
+              brent newa newb u w x d e newi
+            else
+              brent newa newb v w x d e newi
+            end
+          end
+          =#
+      end
+    end
+    
+end
+=#
