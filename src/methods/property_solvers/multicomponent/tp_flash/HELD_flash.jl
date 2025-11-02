@@ -408,15 +408,6 @@ end
 
 function HELD_initial_compositions(model,p,T,z,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess)
 	n = length(z)
-    
-	#=
-	lb = zeros(n)
-    ub = ones(n)
-    for i=1:n
-        lb[i] += eps(Float64)*100.0
-        ub[i] -= eps(Float64)*100.0
-    end
-	=#
 
 	lb = eps(Float64)*1e2
 	ub = 1.0 - lb
@@ -548,15 +539,6 @@ function HELD_Pereira_compositions(model,p,T,z)
     
 	n = length(z)
 
-	#=
-    lb = zeros(n)
-    ub = ones(n)
-    for i=1:n
-        lb[i] += eps(Float64)*100.0
-        ub[i] -= eps(Float64)*100.0
-    end
-	=#
-
 	lb = eps(Float64)*1e2
 	ub = 1.0 - lb
 	
@@ -618,19 +600,19 @@ function HELD_impl(model,p,T,z₀,
 	
 	# z₀ must sum to one, i.e. it is a mole fraction vector
     nc = length(z₀)
-  # calculate reference volume based on Kays rule and vc[i] and scale to give water a vref/v ~ 1
-	
-	# this is expensive for SAFT eos
-    pure = split_pure_model(model)
-    crit = crit_pure.(pure)
-    vref = 0.0
-    for i= 1:nc
-    	Tc,pc,vc = crit[i]
-    	vref += z₀[i]*vc
-    end
-	
 
-#	vref = 3.35*lb_volume(model,T,z₀)
+  	# calculate reference volume based on Kays rule and vc[i] and scale to give water a vref/v ~ 1
+	# this is expensive for SAFT eos
+    #pure = split_pure_model(model)
+    #crit = crit_pure.(pure)
+    #vref = 0.0
+    #for i= 1:nc
+    #	Tc,pc,vc = crit[i]
+    #	vref += z₀[i]*vc
+    #end
+
+	vref = RVS_getvref(model,z₀)
+	
 #	println("HELD Step 1 - vref = $(vref) vref_crit = $(vref_crit)")
 
  	ρ₀ = RVS_density(model,p,T,z₀,vref)

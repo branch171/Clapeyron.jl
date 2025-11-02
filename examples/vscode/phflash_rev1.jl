@@ -310,82 +310,143 @@ vtout,htout = get_props(model,flash_result_out)
 println("Volume out = $(vtout) m3/mol")
 println("Enthalpy out = $(htout) J/mol")
 
-#=
-function brentMethod(f::Function,a,b,itermax,tol)
-    invphi = (1.0 + sqrt(5.0)) / 2.0 - 1.0
-    x = b + invphi * (a - b)
-    v = x
-    w = x
-    dold = 0.0
-    eold = 0.0
-    for iter=1:itermax
-      fv = f(v)
-      fw = f(w)
-      fx = f(x)
-      m = 0.5 * (a + b)
-      if b - a <= eps
-          return m
-      else
-          r = (x - w) * (fx - fv)
-          tq = (x - v) * (fx - fw)
-          tp = (x - v) * tq - (x - w) * r
-          tq2 = 2.0 * (tq - r)
-          p = if tq2 > 0.0 then -tp else tp
-          q = if tq2 > 0.0 then tq2 else -tq2
-          let safe = q <> 0.0
-          deltax = if safe p / q else 0.0
-          parabolic = safe && a < x + deltax && x + deltax < b && abs(deltax) < 0.5 * abs(eold)
-          e = if parabolic then dold elif x < m then b - x else a - x
-          d = if parabolic then deltax else ratio * e
-          u = x + d
-          fu = f(u)
-          if (fu <= fx)
-            if (u >= x) 
-              a=x 
-            else 
-              b=x
-            end
-            v = w
-            w = x
-            x = u
-            fv = fw
-            fw = fx
-            fx = fu
-          else
-            if (u < x) 
-              a=u 
-            else 
-              b=u
-            end
-            if (fu <= fw || w == x)
-              v=w
-              w=u
-              fv=fw
-              fw=fu
-            elseif (fu <= fv || v == x || v == w)
-              v=u
-              fv=fu
-            end
-          end
-          #=
-          if fu <= fx
-              newa = if u < x then a else x
-              newb = if u < x then x else b
-              brent newa newb w x u d e newi
-          else
-            newa = if u < x then u else a
-            newb = if u < x then b else u
-            if fu <= fw || w = x 
-              brent newa newb w u x d e newi
-            elseif fu <= fv || v = x || v = w 
-              brent newa newb u w x d e newi
-            else
-              brent newa newb v w x d e newi
-            end
-          end
-          =#
-      end
+function brentmin(
+    f,
+    x_lower::T,
+    x_upper::T,
+    rel_tol::T = sqrt(eps(T)),
+    abs_tol::T = eps(T),
+    iterations::Integer = 1_000,
+) where {T<:AbstractFloat}
+
+    if x_lower > x_upper
+        error("x_lower must be less than x_upper")
     end
-    
-end
-=#
+
+    # Save for later
+    initial_lower = x_lower
+    initial_upper = x_upper
+
+    golden_ratio::T = T(1) / 2 * (3 - sqrt(T(5.0)))
+
+    new_minimizer = x_lower + golden_ratio * (x_upper - x_lower)
+    new_minimum = f(new_minimizer)
+    best_bound = "initial"
+    f_calls = 1 # Number of calls to f
+    step = zero(T)
+    old_step = zero(T)
+
+    old_minimizer = new_minimizer
+    old_old_minimizer = new_minimizer
+
+    old_minimum = new_minimum
+    old_old_minimum = new_minimum
+
+    iteration = 0
+    converged = false
+
+    while iteration < iterations
+
+        p = zero(T)
+        q = zero(T)
+
+        x_tol = rel_tol * abs(new_minimizer) + abs_tol
+
+        x_midpoint = (x_upper + x_lower) / 2
+
+        if abs(new_minimizer - x_midpoint) <= 2 * x_tol - (x_upper - x_lower) / 2
+            converged = true
+            break
+        end
+
+        iteration += 1
+
+        if abs(old_step) > x_tol
+            # Compute parabola interpolation
+            # new_minimizer + p/q is the optimum of the parabola
+            # Also, q is guaranteed to be positive
+
+            r = (new_minimizer - old_minimizer) * (new_minimum - old_old_minimum)
+            q = (new_minimizer - old_old_minimizer) * (new_minimum - old_minimum)
+            p =
+                (new_minimizer - old_old_minimizer) * q -
+                (new_minimizer - old_minimizer) * r
+            q = 2(q - r)
+
+            if q > 0
+                p = -p
+            else
+                q = -q
+            end
+        end
+
+        if abs(p) < abs(q * old_step / 2) &&
+           p < q * (x_upper - new_minimizer) &&
+           p < q * (new_minimizer - x_lower)
+            old_step = step
+            step = p / q
+
+            # The function must not be evaluated too close to x_upper or x_lower
+            x_temp = new_minimizer + step
+            if ((x_temp - x_lower) < 2 * x_tol || (x_upper - x_temp) < 2 * x_tol)
+                step = (new_minimizer < x_midpoint) ? x_tol : -x_tol
+            end
+        else
+            old_step =
+                (new_minimizer < x_midpoint) ? x_upper - new_minimizer :
+                x_lower - new_minimizer
+            step = golden_ratio * old_step
+        end
+
+        # The function must not be evaluated too close to new_minimizer
+        if abs(step) >= x_tol
+            new_x = new_minimizer + step
+        else
+            new_x = new_minimizer + ((step > 0) ? x_tol : -x_tol)
+        end
+
+        new_f = f(new_x)
+        f_calls += 1
+
+        if new_f < new_minimum
+            if new_x < new_minimizer
+                x_upper = new_minimizer
+                best_bound = "upper"
+            else
+                x_lower = new_minimizer
+                best_bound = "lower"
+            end
+            old_old_minimizer = old_minimizer
+            old_old_minimum = old_minimum
+            old_minimizer = new_minimizer
+            old_minimum = new_minimum
+            new_minimizer = new_x
+            new_minimum = new_f
+        else
+            if new_x < new_minimizer
+                x_lower = new_x
+            else
+                x_upper = new_x
+            end
+            if new_f <= old_minimum || old_minimizer == new_minimizer
+                old_old_minimizer = old_minimizer
+                old_old_minimum = old_minimum
+                old_minimizer = new_x
+                old_minimum = new_f
+            elseif new_f <= old_old_minimum ||
+                   old_old_minimizer == new_minimizer ||
+                   old_old_minimizer == old_minimizer
+                old_old_minimizer = new_x
+                old_old_minimum = new_f
+            end
+        end
+        println("x_lower = $(x_lower), new_minimizer = $(new_minimizer), x_upper = $(x_upper)")
+    end
+
+    return new_minimizer, new_minimum
+
+  end
+
+  bmres = brentmin(phflashmin2, -8.5+273.15, -8+273.15)
+
+  println("brentmin Tmin = $(bmres[1]-273.15) deg C")

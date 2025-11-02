@@ -1,3 +1,15 @@
+function RVS_getvref(model,z₀)
+	pure = split_pure_model(model)
+    crit = crit_pure.(pure)
+	nc = length(z₀)
+    vref = 0.0
+    for i= 1:nc
+    	Tc,pc,vc = crit[i]
+    	vref += z₀[i]*vc
+    end
+	return vref
+end
+
 function RVS_func_rho(model,p,T,x₀,vref,rho)
     v = vref/rho
     A = eos(model,v,T,x₀)

@@ -14,19 +14,24 @@ z = append!(zdry*(1.0-xwater),xwater)
 
 verbose = true
 
-xp,beta,vp,Gsol = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(verbose = verbose))
+HELDflash = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(verbose = verbose))
+
+beta = HELDflash.fractions
+xp = HELDflash.compositions
+vp = HELDflash.volumes
+Gsol =  HELDflash.data.g
 
 if !verbose
     for ip in eachindex(beta)
-        println("Phase beta($(ip)) = $(beta[ip])")
+        println("Phase beta[$(ip)] = $(beta[ip])")
     end
     println("Phase mole fraction:")
     for ip in eachindex(beta)
-        println("Phase x($(ip)) = $(xp[ip])")
+        println("Phase x[$(ip)] = $(xp[ip])")
     end
     println("Phase volumes:")
     for ip in eachindex(beta)
-        println("Phase volume($(ip)) = $(vp[ip])")
+        println("Phase volume[$(ip)] = $(vp[ip])")
     end
     println("Minimum Gibbs Energy = $(Gsol)")
 end

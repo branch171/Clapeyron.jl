@@ -296,13 +296,15 @@ function GFEM_impl(model,p,T,z₀,
   	# calculate reference volume based on Kays rule and vc[i] and scale to give water a vref/v ~ 1
 	
 	# this is expensive for SAFT eos
-    pure = split_pure_model(model)
-    crit = crit_pure.(pure)
-    vref = 0.0
-    for i= 1:nc
-    	Tc,pc,vc = crit[i]
-    	vref += z₀[i]*vc
-    end
+    #pure = split_pure_model(model)
+    #crit = crit_pure.(pure)
+    #vref = 0.0
+    #for i= 1:nc
+    #	Tc,pc,vc = crit[i]
+    #	vref += z₀[i]*vc
+    #end
+
+	vref = RVS_getvref(model,z₀)
 
 	beta = flashin.fractions
 	np = length(beta)
