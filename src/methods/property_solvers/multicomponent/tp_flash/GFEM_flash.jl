@@ -293,16 +293,6 @@ function GFEM_impl(model,p,T,z₀,
 	
 	# z₀ must sum to one, i.e. it is a mole fraction vector
     nc = length(z₀)
-  	# calculate reference volume based on Kays rule and vc[i] and scale to give water a vref/v ~ 1
-	
-	# this is expensive for SAFT eos
-    #pure = split_pure_model(model)
-    #crit = crit_pure.(pure)
-    #vref = 0.0
-    #for i= 1:nc
-    #	Tc,pc,vc = crit[i]
-    #	vref += z₀[i]*vc
-    #end
 
 	vref = RVS_getvref(model,z₀)
 
@@ -311,158 +301,186 @@ function GFEM_impl(model,p,T,z₀,
 	xp = flashin.compositions
 	vp = flashin.volumes
 
-	xGFEM = Vector{Float64}(undef,0)
-	for ip = 1:np-1
-    	push!(xGFEM,beta[ip])
-    	for ic = 1:nc-1
-    		push!(xGFEM,xp[ip][ic])
+	if length(beta) < 1
+
+		ρ₀ = RVS_density(model,p,T,z₀,vref)
+		v₀ = vref/ρ₀
+		A₀ = eos(model,v₀,T,z₀)
+    	G₀ = (A₀ + p*v₀)/R̄/T
+
+		if verbose == true
+        	println("GFEM Step 1 - Fluid is single phase")
     	end
-		push!(xGFEM,vref/vp[ip])
-    end
-    push!(xGFEM,vref/vp[np])
+    	if verbose == true
+			println("GFEM Step 1 - Complete")
+			println("GFEM Step 1 - Phase found 1")
+			println("GFEM Step 1 - Phase moles:")
+			println("GFEM Step 1 - Phase beta(1) = 1")
+			println("GFEM Step 1 - Phase mole fraction:")
+			println("GFEM Step 1 - Phase x(1) = $(z₀)")
+			println("GFEM Step 1 - Phase volumes:")
+			println("GFEM Step 1 - Phase volume(1) = $(v₀)")
+			println("GFEM Step 1 - Minimum Gibbs Energy = $(G₀)")
+    	end
 
-	if verbose == true
-		println("GFEM Step 1 - Start Gibbs Energy Minimisation:")
-	end
-			
-	# xsol contains all the phases xgibbs works on np-1 phases and completes the missing phase via the mole balance.
-	# to be sure we must make xgibbs feasible, no negatives and no greater than 1 values.
-			
-	Gibbs(x) = GFEM_Gibbs_func(model,p,T,z₀,vref,np,x)
-	Gibbs_g(x) = Solvers.gradient(Gibbs, x)
-	Gibbs_h(x) = Solvers.hessian(Gibbs, x)
+    	return  [1.0], [z₀], [v₀], G₀
 
-	lb = eps(Float64)*1e2
-	ub = 1.0 - lb
-	lbrho = 1.0e-6
-	ubrho = 15.0
-			
-	projGibbs(x) = GFEMProjection_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho)
-	cnstGibbs(x,s) = GFEMConstraints_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho,s)
-			
-	xsol,Gsol,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gibbs, Gibbs_g, Gibbs_h, projGibbs, cnstGibbs, xGFEM, max_trust_region_iters, tol, false)
-			
-	if verbose == true
-		println("GFEM Step 2 - Gibbs Energy Minimisation: iterations taken = $(iter)")
-		println("GFEM Step 2 - Gibbs Energy Minimisation: error = $(error) - tol = $(tol)")
-		if check
-			println("GFEM Step 2 - Gibbs Energy Minimisation: did not converge to required tolerance")
-			if error < GFEM_tol && iter < max_trust_region_iters
-				println("GFEM Step 2 - Gibbs Energy Minimisation: solution accepted as this is less than GFEM tolerence $(GFEM_tol)")
-			else
-				println("GFEM Step 2 - Gibbs Energy Minimisation: not converged")
-			end
-		else
-			println("GFEM Step 2 - Gibbs Energy Minimisation: solution found")
-		end
-	end
-			
-	# unpack xsol using mole balance
-	beta = Vector{Float64}(undef,0)
-	xp = Vector{Vector{Float64}}(undef,0)
-	vp = Vector{Float64}(undef,0)
-	ix = 0
-	for ip=1:np-1
-		ix += 1
-		push!(beta,xsol[ix])
-		xc = Vector{Float64}(undef,0)
-		for ic = 1:nc-1
-			ix += 1
-			push!(xc,xsol[ix])
-		end
-		push!(xc,1.0 - sum(xc[1:nc-1]))
-		push!(xp,xc)
-		ix += 1
-		push!(vp,vref/xsol[ix])
-	end
-	ix += 1
-	# volume is now returned
-	push!(vp,vref/xsol[ix])
-	push!(beta,1.0 - sum(beta[1:np-1]))
-	xc = Vector{Float64}(undef,0)
-	for ic = 1:nc
-		sum_moles = 0.0
+	else
+
+		xGFEM = Vector{Float64}(undef,0)
 		for ip = 1:np-1
-			sum_moles += beta[ip]*xp[ip][ic]
+			push!(xGFEM,beta[ip])
+			for ic = 1:nc-1
+				push!(xGFEM,xp[ip][ic])
+			end
+			push!(xGFEM,vref/vp[ip])
 		end
-		push!(xc,(z₀[ic] - sum_moles)/beta[np])
-	end
-	push!(xp,xc)
-			
-	if verbose == true
-		println("GFEM Step 3 - Gibbs Energy Minimisation: Normalise final solution so it mole balances")
-	end
-	# normalise the solution before we finish.
-	phasemoles = Vector{Vector{Float64}}(undef,0)
-	for ic = 1:nc			
-		summoles = 0.0
-		for ip = 1:np
-			summoles += xp[ip][ic] * beta[ip]
-		end
-		mole = Vector{Float64}(undef,0)
-		for ip = 1:np
-			push!(mole, xp[ip][ic] * beta[ip] * z₀[ic] / summoles)
-		end
-		push!(phasemoles, mole)
-	end
+		push!(xGFEM,vref/vp[np])
 
-	for ip = 1:np
-		beta[ip] = 0.0
+		if verbose == true
+			println("GFEM Step 1 - Start Gibbs Energy Minimisation:")
+		end
+				
+		# xsol contains all the phases xgibbs works on np-1 phases and completes the missing phase via the mole balance.
+		# to be sure we must make xgibbs feasible, no negatives and no greater than 1 values.
+				
+		Gibbs(x) = GFEM_Gibbs_func(model,p,T,z₀,vref,np,x)
+		Gibbs_g(x) = Solvers.gradient(Gibbs, x)
+		Gibbs_h(x) = Solvers.hessian(Gibbs, x)
+
+		lb = eps(Float64)*1e2
+		ub = 1.0 - lb
+		lbrho = 1.0e-6
+		ubrho = 15.0
+				
+		projGibbs(x) = GFEMProjection_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho)
+		cnstGibbs(x,s) = GFEMConstraints_Gibbs(x,np,z₀,lb,ub,lbrho,ubrho,s)
+				
+		xsol,Gsol,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gibbs, Gibbs_g, Gibbs_h, projGibbs, cnstGibbs, xGFEM, max_trust_region_iters, tol, false)
+				
+		if verbose == true
+			println("GFEM Step 2 - Gibbs Energy Minimisation: iterations taken = $(iter)")
+			println("GFEM Step 2 - Gibbs Energy Minimisation: error = $(error) - tol = $(tol)")
+			if check
+				println("GFEM Step 2 - Gibbs Energy Minimisation: did not converge to required tolerance")
+				if error < GFEM_tol && iter < max_trust_region_iters
+					println("GFEM Step 2 - Gibbs Energy Minimisation: solution accepted as this is less than GFEM tolerence $(GFEM_tol)")
+				else
+					println("GFEM Step 2 - Gibbs Energy Minimisation: not converged")
+				end
+			else
+				println("GFEM Step 2 - Gibbs Energy Minimisation: solution found")
+			end
+		end
+				
+		# unpack xsol using mole balance
+		beta = Vector{Float64}(undef,0)
+		xp = Vector{Vector{Float64}}(undef,0)
+		vp = Vector{Float64}(undef,0)
+		ix = 0
+		for ip=1:np-1
+			ix += 1
+			push!(beta,xsol[ix])
+			xc = Vector{Float64}(undef,0)
+			for ic = 1:nc-1
+				ix += 1
+				push!(xc,xsol[ix])
+			end
+			push!(xc,1.0 - sum(xc[1:nc-1]))
+			push!(xp,xc)
+			ix += 1
+			push!(vp,vref/xsol[ix])
+		end
+		ix += 1
+		# volume is now returned
+		push!(vp,vref/xsol[ix])
+		push!(beta,1.0 - sum(beta[1:np-1]))
+		xc = Vector{Float64}(undef,0)
 		for ic = 1:nc
-			beta[ip] += phasemoles[ic][ip]
+			sum_moles = 0.0
+			for ip = 1:np-1
+				sum_moles += beta[ip]*xp[ip][ic]
+			end
+			push!(xc,(z₀[ic] - sum_moles)/beta[np])
 		end
-	end
+		push!(xp,xc)
+				
+		if verbose == true
+			println("GFEM Step 3 - Gibbs Energy Minimisation: Normalise final solution so it mole balances")
+		end
+		# normalise the solution before we finish.
+		phasemoles = Vector{Vector{Float64}}(undef,0)
+		for ic = 1:nc			
+			summoles = 0.0
+			for ip = 1:np
+				summoles += xp[ip][ic] * beta[ip]
+			end
+			mole = Vector{Float64}(undef,0)
+			for ip = 1:np
+				push!(mole, xp[ip][ic] * beta[ip] * z₀[ic] / summoles)
+			end
+			push!(phasemoles, mole)
+		end
 
-	for ip = 1:np
-		for ic = 1:nc-1
-			xp[ip][ic] = phasemoles[ic][ip] / beta[ip];
+		for ip = 1:np
+			beta[ip] = 0.0
+			for ic = 1:nc
+				beta[ip] += phasemoles[ic][ip]
+			end
 		end
-		ρp = RVS_density(model,p,T,xp[ip],vref)
-		vp[ip] = vref/ρp
-	end
-	# end of 
-			
-	ivpsort = sortperm(vp, rev = true)
 
-	betas = Vector{Float64}(undef,0)
-	for ip in eachindex(beta)
-		push!(betas,beta[ivpsort[ip]])
-	end
+		for ip = 1:np
+			for ic = 1:nc-1
+				xp[ip][ic] = phasemoles[ic][ip] / beta[ip];
+			end
+			ρp = RVS_density(model,p,T,xp[ip],vref)
+			vp[ip] = vref/ρp
+		end
+		# end of 
+				
+		ivpsort = sortperm(vp, rev = true)
 
-	xps = Vector{Vector{Float64}}(undef,0)
-	for ip in eachindex(xp)
-		# undo sort
-		xs = Vector{Float64}(undef,length(xp[ivpsort[ip]]))
-		for i in eachindex(xp[ivpsort[ip]])
-			xs[i] = xp[ivpsort[ip]][i]
-		end 
-		push!(xps,xs)
-	end
+		betas = Vector{Float64}(undef,0)
+		for ip in eachindex(beta)
+			push!(betas,beta[ivpsort[ip]])
+		end
 
-	vps = Vector{Float64}(undef,0)
-	for ip in eachindex(vp)
-		push!(vps,vp[ivpsort[ip]])
+		xps = Vector{Vector{Float64}}(undef,0)
+		for ip in eachindex(xp)
+			# undo sort
+			xs = Vector{Float64}(undef,length(xp[ivpsort[ip]]))
+			for i in eachindex(xp[ivpsort[ip]])
+				xs[i] = xp[ivpsort[ip]][i]
+			end 
+			push!(xps,xs)
+		end
+
+		vps = Vector{Float64}(undef,0)
+		for ip in eachindex(vp)
+			push!(vps,vp[ivpsort[ip]])
+		end
+				
+		if verbose == true
+			println("GFEM Step 4 - Complete")
+			println("GFEM Step 5 - Phases found $(length(betas))")
+			println("GFEM Step 5 - Phase moles:")
+			for ip = 1:length(betas)
+				println("GFEM Step 5 - Phase beta[$(ip)] = $(betas[ip])")
+			end
+			println("GFEM Step 5 - Phase mole fraction:")
+			for ip = 1:length(betas)
+				println("GFEM Step 5 - Phase x[$(ip)] = $(xps[ip])")
+			end
+			println("GFEM Step 5 - Phase volumes:")
+			for ip = 1:length(betas)
+				println("GFEM Step 5 - Phase volume[$(ip)] = $(vps[ip])")
+			end
+			println("GFEM Step 5 - Minimum Gibbs Energy = $(Gsol)")
+		end
+				
+		return betas,xps,vps,Gsol
+
 	end
-			
-	if verbose == true
-		println("GFEM Step 4 - Complete")
-		println("GFEM Step 5 - Phases found $(length(betas))")
-		println("GFEM Step 5 - Phase moles:")
-		for ip = 1:length(betas)
-			println("GFEM Step 5 - Phase beta[$(ip)] = $(betas[ip])")
-		end
-		println("GFEM Step 5 - Phase mole fraction:")
-		for ip = 1:length(betas)
-			println("GFEM Step 5 - Phase x[$(ip)] = $(xps[ip])")
-		end
-		println("GFEM Step 5 - Phase volumes:")
-		for ip = 1:length(betas)
-			println("GFEM Step 5 - Phase volume[$(ip)] = $(vps[ip])")
-		end
-		println("GFEM Step 5 - Minimum Gibbs Energy = $(Gsol)")
-	end
-			
-	return betas,xps,vps,Gsol
 
 end
 

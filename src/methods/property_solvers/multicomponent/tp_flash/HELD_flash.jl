@@ -601,26 +601,14 @@ function HELD_impl(model,p,T,z₀,
 	# z₀ must sum to one, i.e. it is a mole fraction vector
     nc = length(z₀)
 
-  	# calculate reference volume based on Kays rule and vc[i] and scale to give water a vref/v ~ 1
-	# this is expensive for SAFT eos
-    #pure = split_pure_model(model)
-    #crit = crit_pure.(pure)
-    #vref = 0.0
-    #for i= 1:nc
-    #	Tc,pc,vc = crit[i]
-    #	vref += z₀[i]*vc
-    #end
-
 	vref = RVS_getvref(model,z₀)
-	
-#	println("HELD Step 1 - vref = $(vref) vref_crit = $(vref_crit)")
 
  	ρ₀ = RVS_density(model,p,T,z₀,vref)
 	v₀ = vref/ρ₀
     μ₀ = VT_chemical_potential(model,v₀,T,z₀)
     λ₀ = (μ₀[1:nc-1] .- μ₀[nc])/R̄/T
  
-	ρ₀ = RVS_density(model,p,T,z₀,vref)
+#	ρ₀ = RVS_density(model,p,T,z₀,vref)
     G(x) = HELD_func(model,p,T,z₀,vref,x,λ₀)
     G_g(x) = Solvers.gradient(G,x)
     G_h(x) = Solvers.hessian(G,x)
