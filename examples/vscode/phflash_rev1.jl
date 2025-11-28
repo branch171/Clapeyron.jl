@@ -217,7 +217,7 @@ function findminimum(func::Function,ax,bx,cx,tol)
 		ITMAX=100
 		CGOLD=0.3819660
 		ZEPS=eps(Float64)*1.0e-3
-    d=0.0
+        d=0.0
 		e=0.0
 		a=(ax < cx) ? ax : cx
 		b=(ax > cx) ? ax : cx
