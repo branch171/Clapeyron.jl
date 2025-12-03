@@ -454,7 +454,7 @@ function brentmin(
                 old_old_minimum = new_f
             end
         end
-        println("x_lower = $(x_lower), new_minimizer = $(new_minimizer), x_upper = $(x_upper)")
+    #    println("x_lower = $(x_lower), new_minimizer = $(new_minimizer), x_upper = $(x_upper)")
     end
 
     return new_minimizer, new_minimum
@@ -531,8 +531,23 @@ stageIStep!(vesselPressure, holdupsLast, holdups)
 
 println("holdups new = $(holdups)")
 
+function Qs(model,ps,Ts,zs,ss)
+    fr = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
+    gs = fr.data.g
+    return (gs*Ts + ss*Ts/Clapeyron.R̄),fr.fractions
+end
 
-# test isenthalpic flash
+function psflashmin(T)
+   Q,β = Qs(model,ps,T,zs,ss)
+   return -Q,length(β)
+end
+
+function psflashmin2(T)
+   Q,β = Qs(model,ps,T,zs,ss)
+   return -Q
+end
+
+# test isenthalpic flash vapour
 
 println(" ")
 ps = vesselPressureStart
@@ -556,21 +571,48 @@ println("vn = $(vn) m3/mol")
 println("hn = $(hn) J/mol")
 println("sn = $(sn) J/mol/K")
 
-function Qs(model,ps,Ts,zs,ss)
-    fr = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
-    gs = fr.data.g
-    return (gs*Ts + ss*Ts/Clapeyron.R̄),fr.fractions
-end
+Ta = Ts - 0.1
+Tb = Ts
+Tc = Ts + 0.1
 
-function psflashmin(T)
-   Q,β = Qs(model,ps,T,zs,ss)
-   return -Q,length(β)
-end
+println("Qa = $(psflashmin(Ta))")
+println("Qb = $(psflashmin(Tb))")
+println("Qc = $(psflashmin(Tc))")
 
-function psflashmin2(T)
-   Q,β = Qs(model,ps,T,zs,ss)
-   return -Q
-end
+Ta, Tb, Tc, Qa, Qb, Qc, Npa, Npb , Npc = bracketmin(psflashmin,Ta,Tc)
+
+println("Ta = $(Ta - 273.15) deg C, Qa = $(Qa) J/mol/K, Npa = $(Npa)")
+println("Tb = $(Tb - 273.15) deg C, Qb = $(Qb) J/mol/K, Npa = $(Npb)")
+println("Tc = $(Tc - 273.15) deg C, Qc = $(Qc) J/mol/K, Npa = $(Npc)")
+
+bmres = brentmin(psflashmin2, Ta, Tc)
+
+println("brentmin Tmin = $(bmres[1]-273.15) deg C")
+println("brentmin dT = $(bmres[1]-Ts) deg C")
+
+# test isenthalpic flash liquid
+
+println(" ")
+ps = vesselPressureStart
+Ts = liquidTemperature
+zs = liquidX
+
+flash = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
+vs,hs,ss = get_props(model,flash)
+
+println("vs = $(vs) m3/mol")
+println("hs = $(hs) J/mol")
+println("ss = $(ss) J/mol/K")
+
+ps -= Δpressure
+Tsn = Ts - 0.2787
+
+flash = Clapeyron.tp_flash_impl(model,ps,Tsn,zs, HELDTPFlash(verbose = false))
+vn,hn,sn = get_props(model,flash)
+
+println("vn = $(vn) m3/mol")
+println("hn = $(hn) J/mol")
+println("sn = $(sn) J/mol/K")
 
 Ta = Ts - 0.1
 Tb = Ts
@@ -590,3 +632,175 @@ bmres = brentmin(psflashmin2, Ta, Tc)
 
 println("brentmin Tmin = $(bmres[1]-273.15) deg C")
 println("brentmin dT = $(bmres[1]-Ts) deg C")
+
+ps = 27.0e5
+Ts = Tf
+
+zCO2 = 0.997275
+zs = [zCO2,1.0-zCO2]
+
+volume = 5500/9
+
+level = zeros(2)
+level[1] = 0.95
+level[2] = 1.0 - level[1]
+
+mutable struct holdupnew
+    p::Float64
+    T::Float64
+    mw::Float64
+    v::Float64
+    h::Float64
+    s::Float64
+    tv::Float64         # total volume
+    tm::Float64         # total moles
+    cm::Vector{Float64} # component moles
+    z::Vector{Float64}
+    flash::FlashResult
+end
+
+function get_propsnew(model,fr)
+    T = fr.data.T
+    β = fr.fractions
+    v = fr.volumes
+    x = fr.compositions
+    mw = Vector{Float64}(undef,0)
+    for ip = eachindex(β)
+        push!(mw, Clapeyron.molecular_weight(model,x[ip]))
+    end
+    vt = 0.0
+    for ip = eachindex(β)
+        vt += β[ip]*v[ip]
+    end
+    h = Vector{Float64}(undef,0)
+    s = Vector{Float64}(undef,0)
+    for ip = eachindex(β)
+        push!(h, Clapeyron.VT_enthalpy(model,v[ip],T,x[ip]))
+        push!(s, Clapeyron.VT_entropy(model,v[ip],T,x[ip]))
+    end
+    mwt = 0.0
+    ht  = 0.0
+    st  = 0.0
+    for ip = eachindex(β)
+        mwt += β[ip]*mw[ip]
+        ht  += β[ip]*h[ip]
+        st  += β[ip]*s[ip]
+    end
+    return mwt,vt,ht,st
+end
+
+function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
+
+    verbose = false
+    flash = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
+
+    βf = flash.fractions
+    vf = flash.volumes
+    xf = flash.compositions
+
+    nphases = length(βf)
+
+    holdups = Vector{holdupnew}(undef,0)
+
+    for ip = 1:nphases
+        mw = Clapeyron.molecular_weight(model,xf[ip])
+        v = vf[ip]
+        h = Clapeyron.VT_enthalpy(model,vf[ip],Ts,xf[ip])
+        s = Clapeyron.VT_entropy(model,vf[ip],Ts,xf[ip])
+        tv = level[ip]*volume
+        tm = tv/v
+        cm = Vector{Float64}(undef,0)
+        for ic = eachindex(zs)
+            push!(cm, xf[ip][ic]*tm)
+        end
+        push!(holdups, holdupnew(ps,Ts,mw,v,h,s,tm,tv,cm,xf[ip],flash))
+    end
+    println("")
+    println("Blowndown Function Start:")
+    println("Initialization:")
+    println("")
+    println("holdups = $(holdups)")
+
+    Δp = (ps - pe)/nstep
+    ΔT = fill(0.2,length(holdups))
+    ΔQ = zeros(length(holdups))
+
+    for istep=1:nstep
+
+        holdupsLast = holdups
+
+        for ih = eachindex(holdups)
+            ΔsLast = 0.0
+            ΔsError = 1
+            while(ΔsError > 0.001)
+                ps = holdupsLast[ih].p - Δp
+                Ts = holdupsLast[ih].T - ΔT[ih]
+                zs = holdupsLast[ih].z
+                Δs = ΔQ[ih]*log(Ts/holdupsLast[ih].T)/(Ts - holdupsLast[ih].T)
+                ΔsError = abs(Δs - ΔsLast)
+                ΔsLast = Δs
+                ss = holdupsLast[ih].s + Δs
+
+            #    println("ps = $(ps)")
+            #    println("Ts = $(Ts)")
+            #    println("Δs = $(Δs)")
+            #    println("ΔsError = $(ΔsError)")
+            #    println("ss = $(ss)")
+
+                function Qs(model,ps,Ts,zs,ss)
+                    fr = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
+                    gs = fr.data.g
+                    return (gs*Ts + ss*Ts/Clapeyron.R̄),fr.fractions
+                end
+
+                function psflashmin(T)
+                    Q,β = Qs(model,ps,T,zs,ss)
+                    return -Q,length(β)
+                end
+
+                function psflashmin2(T)
+                    Q,β = Qs(model,ps,T,zs,ss)
+                    return -Q
+                end
+
+                Ta = Ts - ΔT[ih]/2
+                Tb = Ts
+                Tc = Ts + ΔT[ih]/2
+
+                Ta, Tb, Tc, Qa, Qb, Qc, Npa, Npb , Npc = bracketmin(psflashmin,Ta,Tc)
+
+            #    println("Ta = $(Ta - 273.15) deg C, Qa = $(Qa) J/mol/K, Npa = $(Npa)")
+            #    println("Tb = $(Tb - 273.15) deg C, Qb = $(Qb) J/mol/K, Npa = $(Npb)")
+            #    println("Tc = $(Tc - 273.15) deg C, Qc = $(Qc) J/mol/K, Npa = $(Npc)")
+
+                bmres = brentmin(psflashmin2, Ta, Tc)
+                holdups[ih].p = ps
+                ΔT[ih] = Ts - bmres[1]
+            #    println("ΔT[$(ih)] = $(ΔT[ih])")
+                holdups[ih].T = bmres[1]
+                holdups[ih].z = zs
+                flash = Clapeyron.tp_flash_impl(model,holdups[ih].p,holdups[ih].T,holdups[ih].z, HELDTPFlash(verbose = false))
+            #    println("flash[$(ih)] = $(flash)")
+                mws,vs,hs,ss = get_propsnew(model,flash)
+                holdups[ih].mw = mws
+                holdups[ih].v = vs
+                holdups[ih].h = hs
+                holdups[ih].s = ss
+                holdups[ih].flash = flash   
+            end
+            holdupsLast = holdups
+            println("")
+            println("ps[$(ih)] = $(holdups[ih].p/1e5) bara")
+            println("ΔT[$(ih)] = $(ΔT[ih])")
+            println("Ts[$(ih)] = $(holdups[ih].T-273.15) deg C")
+            println("holdups[$(ih)] = $(holdups[ih])")
+        end
+    end
+
+end
+
+#pe = 8.0e5
+#nstep = 3*19
+pe = 26.0e5
+nstep = 3
+BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
