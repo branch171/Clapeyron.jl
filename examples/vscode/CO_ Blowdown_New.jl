@@ -788,6 +788,44 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
                 holdups[ih].s = ss
                 holdups[ih].flash = flash   
             end
+
+            # mix produced vapour and liquid from each phase this is isenthalpic process
+            # ih = 1 is always the lightest phase we assume lightest phases move up to previous phase and heaviest moves down
+            # we need some bookkeeping here if we assume a two phase system 
+            # then 
+            # tm[1] = β[1][1]*holdups[1].tm + β[1][2]*holdups[2].tm
+            # tm[2] = β[2][2]*holdups[2].tm + β[2][1]*holdups[1].tm
+            #
+            # three phase
+            # tm[1] = β[1][1]*holdups[1].tm + β[1][2]*holdups[2].tm
+            # tm[2] = β[2][2]*holdups[2].tm + β[2][1]*holdups[1].tm + β[3][1]*holdups[1].tm + β[1][3]*holdups[3].tm + β[2][3]*holdups[3].tm
+            # tm[3] = β[3][3]*holdups[2].tm + β[3][2]*holdups[1].tm
+            #
+            # a phase can only exchange with its neighbours so in 4 phase system consider phase 3
+            # tm[3] = β[3][3]*holdups[3].tm + β[3][2]*holdups[1].tm + β[4][2]*holdups[1].tm + β[1][4]*holdups[4].tm + β[2][4]*holdups[4].tm + β[3][4]*holdups[4].tm
+            #
+            # in general for a phase ih its everything from phase ih-1 β ih to nh and phase ih+1 evrything from 1 to ih
+            #
+            # if ih = 1 then we have no ih-1 contribution and if ih = nh we have no ih+1 contribution
+            #
+            #its possible that during a step a phase can disappear and conversly a phase can appear. So the β[ip = 1 to np][ih] we need to choose the phase with the 
+            # cloest density to the density in the ih phase to select ip of the β[ip = 1 to np] that the separation is occur about. ip < ip selected go up  and ip > ip selected go down
+            #
+            # if the phase number of the nh hold up is great than nh we need a new holdup
+            # ih = 1 is always the lightest phase
+            #
+            # its possible for a phase to disappear we set tm = 0 and it is kept in the holdup list in case it is reactivated by moles being added. 
+            # if tm = 0 for a phase it contriutes nothing to the surrounding phases and does not need flashing. The T for the phase is assumed to be the average of the surrounding phases
+            #
+            # most likely way is we are liquid draining and at some point all the liquid is removed. However, even in top or vapour removal a light liquid may evaporate and level a 
+            # heavier phase below.
+            #
+            # the phase that disappers or becomes single phase and more like the phase above or below it. We could check the density and mix in fully with the phase above or below and 
+            # then remove it
+            # 
+            # for a phase to disappear then the flashes for all holupds must have produced less phases than current holdups. Likewise if a phase reappers then the number of phases or 
+            # one of the holdups must be greater that the total holdups
+
             holdupsLast = holdups
             println("")
             println("ps[$(ih)] = $(holdups[ih].p/1e5) bara")
