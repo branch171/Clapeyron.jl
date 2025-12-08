@@ -250,3 +250,326 @@ println("gwVap = $(gwVap) KJ/kg")
 sstp = sltp - 8875/Ttp
 
 println("sstp = $(sstp) J/mol/K")
+
+# check p = 101325 Pa
+
+println("")
+println("check")
+Tin = -78.75+273.15
+pin = 1.01325e5
+xs = 0.64275
+zin = [(x[1] - xs)/(1 - xs), x[2]/(1 - xs)]
+
+verbose = false
+flash_result = Clapeyron.tp_flash_impl(model,pin,Tin,zin, HELDTPFlash(verbose = verbose))
+
+Tf = flash_result.data.T
+println("T flash = $(Tf-273.15)")
+βf = flash_result.fractions
+println("βf = $(βf)")
+vf = flash_result.volumes
+xf = flash_result.compositions
+mwf = zeros(length(βf))
+for ip = eachindex(mwf)
+    mwf[ip] = Clapeyron.molecular_weight(model,xf[ip])
+end
+vt = 0.0
+for ip = eachindex(βf)
+    global vt += βf[ip]*vf[ip]
+end
+
+hf = Clapeyron.VT_enthalpy(model, vt,Tf,zin)
+println("hf = $(hf) J/mol/K")
+
+sf = Clapeyron.VT_entropy(model, vt,Tf,zin)
+println("sf = $(sf) J/mol/K")
+
+gf = hf - Tf*sf
+println("gf = $(gf) J/mol")
+
+μf = Clapeyron.VT_chemical_potential(model, vf[1], Tf, xf[1])
+println("μf = $(μf) J/mol")
+
+μfmix = xf[1][1]*μf[1] + xf[1][2]*μf[2]
+println("μfmix = $(μfmix) J/mol")
+
+gs = gibbs_dryice(pin,Tin,ptp,Ttp,hltp,sltp)
+println("gs = $(gs) J/mol")
+
+gmix = xs*gs + (1 - xs)*gf
+println("gmix = $(gmix) J/mol")
+
+function gibbsmix(model,p,T,z,xs,iCO2)
+    zf = zeros(length(z))
+    zf[iCO2] = z[iCO2] - xs
+    for i=eachindex(z)
+        if i ≠ iCO2
+            zf[i] = z[i]
+        end
+    end
+    sumzf = sum(zf)
+    for i=eachindex(z)
+        zf[i] /= sumzf
+    end
+    f = Clapeyron.tp_flash_impl(model,p,T,zf, HELDTPFlash(verbose = false))
+    βf = f.fractions
+    vf = f.volumes
+    xf = f.compositions
+    vt = 0.0
+    for ip = eachindex(βf)
+        vt += βf[ip]*vf[ip]
+    end
+    hf = zeros(length(z))
+    for ip = eachindex(βf)
+        hf[ip] = Clapeyron.VT_enthalpy(model,vf[ip],T,xf[ip])
+    end
+    ht = 0.0
+    for ip = eachindex(βf)
+        ht += βf[ip]*hf[ip]
+    end
+    sf = zeros(length(z))
+    for ip = eachindex(βf)
+        sf[ip] = Clapeyron.VT_entropy(model,vf[ip],T,xf[ip])
+    end
+    st = 0.0
+    for ip = eachindex(βf)
+        st += βf[ip]*sf[ip]
+    end
+    gf = zeros(length(z))
+    for ip = eachindex(βf)
+        gf[ip] = hf[ip] - T*sf[ip]
+    end
+    gt = 0.0
+    for ip = eachindex(βf)
+        gt += βf[ip]*gf[ip]
+    end
+    gs = gibbs_dryice(p,T,ptp,Ttp,hltp,sltp)
+    gm = xs*gs + (1-xs)*gt
+    return gm
+end
+
+gm  = gibbsmix(model,pin,Tin,x,xs,1)
+println("gm = $(gm) J/mol")
+
+npoint = 21
+xsmin = zeros(npoint)
+gmmin = zeros(npoint)
+xsolid = zeros(npoint)
+gmixture = zeros(npoint)
+for i = 1:npoint
+    xsmin[i] = xs
+    gmmin[i] = -796.33 + 0.04*(i-1)/(npoint-1)
+    xsolid[i] = 0.6 + 0.075*(i-1)/(npoint-1)
+    gmixture[i] = gibbsmix(model,pin,Tin,x,xsolid[i],1)
+end
+
+p1 = plot(
+    [xsolid,xsmin], 
+    [gmixture,gmmin], 
+    xlabel = "xs", 
+    ylabel = "gm",
+    left_margin = 10Plots.mm,
+    bottom_margin = 10Plots.mm,
+    xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+    grid = :on,linewidth=3,
+    size=(1600,1200))
+display(p1)
+
+function brentmin(
+    f,
+    x_lower::T,
+    x_upper::T,
+    rel_tol::T = sqrt(eps(T)),
+    abs_tol::T = eps(T),
+    iterations::Integer = 1_000,
+) where {T<:AbstractFloat}
+
+    if x_lower > x_upper
+        error("x_lower must be less than x_upper")
+    end
+
+    # Save for later
+    initial_lower = x_lower
+    initial_upper = x_upper
+
+    golden_ratio::T = T(1) / 2 * (3 - sqrt(T(5.0)))
+
+    new_minimizer = x_lower + golden_ratio * (x_upper - x_lower)
+    new_minimum = f(new_minimizer)
+    best_bound = "initial"
+    f_calls = 1 # Number of calls to f
+    step = zero(T)
+    old_step = zero(T)
+
+    old_minimizer = new_minimizer
+    old_old_minimizer = new_minimizer
+
+    old_minimum = new_minimum
+    old_old_minimum = new_minimum
+
+    iteration = 0
+    converged = false
+
+    while iteration < iterations
+
+        p = zero(T)
+        q = zero(T)
+
+        x_tol = rel_tol * abs(new_minimizer) + abs_tol
+
+        x_midpoint = (x_upper + x_lower) / 2
+
+        if abs(new_minimizer - x_midpoint) <= 2 * x_tol - (x_upper - x_lower) / 2
+            converged = true
+            break
+        end
+
+        iteration += 1
+
+        if abs(old_step) > x_tol
+            # Compute parabola interpolation
+            # new_minimizer + p/q is the optimum of the parabola
+            # Also, q is guaranteed to be positive
+
+            r = (new_minimizer - old_minimizer) * (new_minimum - old_old_minimum)
+            q = (new_minimizer - old_old_minimizer) * (new_minimum - old_minimum)
+            p =
+                (new_minimizer - old_old_minimizer) * q -
+                (new_minimizer - old_minimizer) * r
+            q = 2(q - r)
+
+            if q > 0
+                p = -p
+            else
+                q = -q
+            end
+        end
+
+        if abs(p) < abs(q * old_step / 2) &&
+           p < q * (x_upper - new_minimizer) &&
+           p < q * (new_minimizer - x_lower)
+            old_step = step
+            step = p / q
+
+            # The function must not be evaluated too close to x_upper or x_lower
+            x_temp = new_minimizer + step
+            if ((x_temp - x_lower) < 2 * x_tol || (x_upper - x_temp) < 2 * x_tol)
+                step = (new_minimizer < x_midpoint) ? x_tol : -x_tol
+            end
+        else
+            old_step =
+                (new_minimizer < x_midpoint) ? x_upper - new_minimizer :
+                x_lower - new_minimizer
+            step = golden_ratio * old_step
+        end
+
+        # The function must not be evaluated too close to new_minimizer
+        if abs(step) >= x_tol
+            new_x = new_minimizer + step
+        else
+            new_x = new_minimizer + ((step > 0) ? x_tol : -x_tol)
+        end
+
+        new_f = f(new_x)
+        f_calls += 1
+
+        if new_f < new_minimum
+            if new_x < new_minimizer
+                x_upper = new_minimizer
+                best_bound = "upper"
+            else
+                x_lower = new_minimizer
+                best_bound = "lower"
+            end
+            old_old_minimizer = old_minimizer
+            old_old_minimum = old_minimum
+            old_minimizer = new_minimizer
+            old_minimum = new_minimum
+            new_minimizer = new_x
+            new_minimum = new_f
+        else
+            if new_x < new_minimizer
+                x_lower = new_x
+            else
+                x_upper = new_x
+            end
+            if new_f <= old_minimum || old_minimizer == new_minimizer
+                old_old_minimizer = old_minimizer
+                old_old_minimum = old_minimum
+                old_minimizer = new_x
+                old_minimum = new_f
+            elseif new_f <= old_old_minimum ||
+                   old_old_minimizer == new_minimizer ||
+                   old_old_minimizer == old_minimizer
+                old_old_minimizer = new_x
+                old_old_minimum = new_f
+            end
+        end
+    #    println("x_lower = $(x_lower), new_minimizer = $(new_minimizer), x_upper = $(x_upper)")
+    end
+
+    return new_minimizer, new_minimum
+
+end
+
+function pT_flash_CO2Solid(model,p,T,z)
+    iCO2 = 0
+    for i = eachindex(model.components)
+        if model.components[i] == "carbon dioxide"
+            iCO2 = i
+        end
+    end
+    @assert iCO2 > 0 "carbon dioxide must me present in components"
+    xs_eps = eps(Float64)
+    xs_min = 0.0
+    xs_max = z[iCO2]*(1 - xs_eps)
+    f = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(verbose = false))
+    βf = f.fractions
+    vf = f.volumes
+    xf = f.compositions
+    imax = 1
+    if length(βf) > 1
+        βmax = 0.0
+        for i = eachindex(βf)
+            if βf[i] > βmax
+                βmax = βf[i]
+                imax = i
+            end
+        end
+    end
+    μf = Clapeyron.VT_chemical_potential(model, vf[imax], T, xf[imax])
+    μs = gibbs_dryice(p,T,ptp,Ttp,hltp,sltp)
+    if μs < μf[iCO2]
+        fnc(xs) = gibbsmix(model,p,T,z,xs,iCO2)
+        res = brentmin(fnc, xs_min, xs_max)
+        xs = res[1]
+        zf = zeros(length(z))
+        zf[iCO2] = z[iCO2] - xs
+        for i=eachindex(z)
+            if i ≠ iCO2
+                zf[i] = z[i]
+            end
+        end
+        sumzf = sum(zf)
+        for i=eachindex(z)
+            zf[i] /= sumzf
+        end
+        f = Clapeyron.tp_flash_impl(model,p,T,zf, HELDTPFlash(verbose = false))
+        return xs,f
+    else
+        return xsmin,f
+    end
+end
+
+βCO2, flash_fluid = pT_flash_CO2Solid(model,pin,Tin,x)
+
+println("moles of solid CO2 = $(βCO2)")
+println("moles of fluid = $(1 - βCO2)")
+
+println("fluid βf = $(flash_fluid.fractions)")
+println("fluid vf = $(flash_fluid.volumes) m3/mol")
+for i = eachindex(flash_fluid.fractions)
+    println("fluid xf[$(i)] = $(flash_fluid.compositions[i])")
+end
+
+
