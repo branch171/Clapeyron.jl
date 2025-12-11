@@ -77,10 +77,14 @@ println("at 40 bara its 95% and at 27 bara its 5%")
 pbubble = pbase
 mix_Tbub = bubble_temperature(model,pbubble,x)
 
+println("mix_Tbub = $(mix_Tbub)")
+
 println("T bubble = $(mix_Tbub[1]-273.15)")
 
 pdew = pbase
 mix_Tdew = dew_temperature(model,pdew,x)
+
+println("mix_Tdew = $(mix_Tdew)")
 
 println("T dew = $(mix_Tdew[1]-273.15)")
 
@@ -467,148 +471,354 @@ level = zeros(2)
 level[1] = 0.95
 level[2] = 1.0 - level[1]
 
-mutable struct holdupnew
-    p::Float64
-    T::Float64
+mutable struct phase
+    β::Float64
+    volume::Float64
+    moles::Float64
     mw::Float64
     v::Float64
     h::Float64
     s::Float64
-    tv::Float64         # total volume
-    tm::Float64         # total moles
-    cm::Vector{Float64} # component moles
     z::Vector{Float64}
-    flash::FlashResult
 end
 
-function get_propsnew(model,fr)
+mutable struct holdup
+    p::Float64
+    T::Float64
+    volume::Float64         # total volume
+    moles::Float64          # total moles
+    mw::Float64
+    v::Float64
+    h::Float64
+    s::Float64
+    z::Vector{Float64}
+    phases::Vector{phase}   # component moles
+end
+
+function get_props(model,fr)
     T = fr.data.T
     β = fr.fractions
     v = fr.volumes
     x = fr.compositions
     mw = Vector{Float64}(undef,0)
-    for ip = eachindex(β)
-        push!(mw, Clapeyron.molecular_weight(model,x[ip]))
-    end
-    vt = 0.0
-    for ip = eachindex(β)
-        vt += β[ip]*v[ip]
-    end
     h = Vector{Float64}(undef,0)
     s = Vector{Float64}(undef,0)
     for ip = eachindex(β)
+        push!(mw, Clapeyron.molecular_weight(model,x[ip]))
         push!(h, Clapeyron.VT_enthalpy(model,v[ip],T,x[ip]))
         push!(s, Clapeyron.VT_entropy(model,v[ip],T,x[ip]))
     end
     mwt = 0.0
+    vt  = 0.0
     ht  = 0.0
     st  = 0.0
     for ip = eachindex(β)
         mwt += β[ip]*mw[ip]
+        vt  += β[ip]*v[ip]
         ht  += β[ip]*h[ip]
         st  += β[ip]*s[ip]
     end
-    return mwt,vt,ht,st
+    return β,mw,mwt,v,vt,h,ht,s,st,x
 end
+
+#=
+println("Check ps flash at inital condition")
+
+        ΔT = -0.33
+
+        flash = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
+        βf,mwf,mwtf,vf,vtf,hf,htf,sf,stf,xf = get_props(model,flash)
+
+        ss = sf[1]
+        xs = xf[1]
+        ps -= 0.25e5
+
+        mix_Tdew = dew_temperature(model,ps,xs)
+        Tdew = mix_Tdew[1]
+
+        flash = Clapeyron.tp_flash_impl(model,ps,Tdew,xs, HELDTPFlash(verbose = false))
+        βf,mwf,mwtf,vf,vtf,hf,htf,sf,stf,xf = get_props(model,flash)
+
+        println("Tdew = $(Tdew-273.15)")
+        println("ss = $(ss) and sdew = $(stf)")
+
+                    function Qs(model,p,T,x,sspec)
+                        fr = Clapeyron.tp_flash_impl(model,p,T,x, HELDTPFlash(verbose = false))
+                        g = fr.data.g
+                        return (g*T + sspec*T/Clapeyron.R̄),fr.fractions
+                    end
+
+                    function psflashmin(T)
+                        Q,β = Qs(model,ps,T,xs,ss)
+                        return -Q,length(β)
+                    end
+
+                    function psflashmin2(T)
+                        Q,β = Qs(model,ps,T,xs,ss)
+                        return -Q
+                    end
+
+                    Ta = Ts + 2.0*ΔT
+                    Qa,Npa = psflashmin(Ta)
+                    Tb = Ts
+                    Qb,Npb = psflashmin(Tb)
+                    Tc = Ts - 1.0*ΔT
+                    Qc,Npc = psflashmin(Tc)
+
+                    println("Ta = $(Ta - 273.15) deg C, Qa = $(Qa) J/mol/K, Npa = $(Npa)")
+                    println("Tb = $(Tb - 273.15) deg C, Qb = $(Qb) J/mol/K, Npb = $(Npb)")
+                    println("Tc = $(Tc - 273.15) deg C, Qc = $(Qc) J/mol/K, Npc = $(Npc)")
+
+                    bmres = brentmin(psflashmin2, Ta, Tc)
+
+                    println("Tmin = $(bmres)")
+                    println("ΔT = $(bmres[1] - Ts)")
+
+                    N=50
+                    Tm = LinRange(bmres[1]-273.15, bmres[1]-273.15,  N)
+                    Tg = LinRange(Ta-273.15, Tc-273.15,  N)
+                    Qg =  zeros(N)
+                    βg =  zeros(N)
+                    sg =  zeros(N)
+
+                    for i in 1:N
+                        Q, β = Qs(model,ps,Tg[i]+273.15,xs,ss)
+                        Qg[i] = -Q
+                        βg[i] =  β[1]
+                        fg = Clapeyron.tp_flash_impl(model,ps,Tg[i]+273.15,xs, HELDTPFlash(verbose = false))
+                        βfg,mwfg,mwtfg,vfg,vtfg,hfg,htfg,sfg,stfg,xfg = get_props(model,fg)
+                        sg[i] = stfg - ss
+                    end
+
+                    p1 = plot([Tg,Tm], [Qg,Qg], xlabel = "T deg C", ylabel = "Qmod [J/mol/K]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,tickfontsize=12,size=(1600,1200))
+                    display(p1)
+
+                    p2 = plot([Tg], [βg], xlabel = "T deg C", ylabel = "βg [-]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,tickfontsize=12,size=(1600,1200))
+                    display(p2)
+
+                    p3 = plot([Tg,Tm], [sg,sg], xlabel = "T deg C", ylabel = "sg [J/mol/K]",left_margin = 10Plots.mm,bottom_margin = 10Plots.mm,grid = :on,linewidth=3,tickfontsize=12,size=(1600,1200))
+                    display(p3)
+
+                    flash = Clapeyron.tp_flash_impl(model,ps,bmres[1],xs, HELDTPFlash(verbose = false))
+                    βf,mwf,mwtf,vf,vtf,hf,htf,sf,stf,xf = get_props(model,flash)
+
+                    println("ss = $(ss) and sf = $(stf)")
+
+println("Check complete")
+=#
 
 function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
 
-    verbose = false
-    flash = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
+    mix_Tbub = bubble_temperature(model,ps,zs)
+    Tbub = mix_Tbub[1]
+    mix_Tdew = dew_temperature(model,ps,zs)
+    Tdew = mix_Tdew[1]
 
-    βf = flash.fractions
-    vf = flash.volumes
-    xf = flash.compositions
+    holdups = Vector{holdup}(undef,0)
 
-    nphases = length(βf)
+    if Ts <= Tbub
 
-    holdups = Vector{holdupnew}(undef,0)
+        y = zs
+        for ic = eachindex(y)
+            y[ic] = mix_Tbub[4][ic]
+        end
+        flashy = Clapeyron.tp_flash_impl(model,ps,Tbub,y, HELDTPFlash(verbose = false))
 
-    for ip = 1:nphases
-        mw = Clapeyron.molecular_weight(model,xf[ip])
-        v = vf[ip]
-        h = Clapeyron.VT_enthalpy(model,vf[ip],Ts,xf[ip])
-        s = Clapeyron.VT_entropy(model,vf[ip],Ts,xf[ip])
-        tv = level[ip]*volume
+        βf,mwf,mwtf,vf,vtf,hf,htf,sf,stf,xf = get_props(model,flashy)
+
+        tv = 0.0
+        tm = tv/vtf
+        cm = Vector{Float64}(undef,0)
+        for ic = eachindex(y)
+            push!(cm, y[ic]*tm)
+        end
+        push!(holdups, holdup(ps,Tbub,βf,mwf,vf,hf,sf,tv,tm,cm,zf,flashy))
+
+        x = zs
+        flashx = Clapeyron.tp_flash_impl(model,ps,Ts,x, HELDTPFlash(verbose = false))
+
+        vf = flashx.volumes
+        xf = flashx.compositions
+
+        mw = Clapeyron.molecular_weight(model,x)
+        v = vf[1]
+        h = Clapeyron.VT_enthalpy(model,v,Ts,x)
+        s = Clapeyron.VT_entropy(model,v,Ts,x)
+        tv = volume
         tm = tv/v
         cm = Vector{Float64}(undef,0)
-        for ic = eachindex(zs)
-            push!(cm, xf[ip][ic]*tm)
+        for ic = eachindex(x)
+            push!(cm, x[ic]*tm)
         end
-        push!(holdups, holdupnew(ps,Ts,mw,v,h,s,tm,tv,cm,xf[ip],flash))
+        push!(holdups, holdup(ps,Ts,mw,v,h,s,tv,tm,cm,x,flashx))
+
+    elseif Ts >= Tdew
+
+        y = zs
+        flashy = Clapeyron.tp_flash_impl(model,ps,Ts,y, HELDTPFlash(verbose = false))
+
+        βf = flashy.fractions
+        vf = flashy.volumes
+        xf = flashy.compositions
+
+        println("Tdew βf = $(βf)")
+
+        mw = Clapeyron.molecular_weight(model,y)
+        v = vf[1]
+        h = Clapeyron.VT_enthalpy(model,v,Ts,y)
+        s = Clapeyron.VT_entropy(model,v,Ts,y)
+        tv = volume
+        tm = tv/v
+        cm = Vector{Float64}(undef,0)
+        for ic = eachindex(y)
+            push!(cm, y[ic]*tm)
+        end
+        push!(holdups, holdup(ps,Ts,mw,v,h,s,tv,tm,cm,y,flashy))
+
+        x = zs
+        for ic = eachindex(x)
+            x[ic] = mix_Tdew[4][ic]
+        end
+        flashx = Clapeyron.tp_flash_impl(model,ps,Tdew,x, HELDTPFlash(verbose = false))
+
+        vf = flashx.volumes
+        xf = flashx.compositions
+
+        mw = Clapeyron.molecular_weight(model,x)
+        v = vf[1]
+        h = Clapeyron.VT_enthalpy(model,v,Tdew,x)
+        s = Clapeyron.VT_entropy(model,v,Tdew,x)
+        tv = 0.0
+        tm = tv/v
+        cm = Vector{Float64}(undef,0)
+        for ic = eachindex(x)
+            push!(cm, x[ic]*tm)
+        end
+        push!(holdups, holdup(ps,Tdew,mw,v,h,s,tv,tm,cm,x,flashx))
+
+    else
+        flash = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
+        βf,mwf,mwtf,vf,vtf,hf,htf,sf,stf,xf = get_props(model,flash) 
+        for ip = eachindex(βf)
+            phases = Vector{phase}(undef,0)
+            push!(phases, phase(1.0,level[ip]*volume,level[ip]*volume/vf[ip],mwf[ip],vf[ip],hf[ip],sf[ip],xf[ip]))
+            push!(holdups, holdup(ps,Ts,level[ip]*volume,level[ip]*volume/vf[ip],mwf[ip],vf[ip],hf[ip],sf[ip],xf[ip],phases))
+        end
     end
+
     println("")
     println("Blowndown Function Start:")
     println("Initialization:")
     println("")
     println("holdups = $(holdups)")
+    
 
     Δp = (ps - pe)/nstep
-    ΔT = fill(0.2,length(holdups))
+    ΔT = fill(-0.33,length(holdups))
     ΔQ = zeros(length(holdups))
+
+    T1_Plot = Vector{Float64}(undef,0)
+    p1_Plot = Vector{Float64}(undef,0)
+    m1_Plot = Vector{Float64}(undef,0)
+
+    T2_Plot = Vector{Float64}(undef,0)
+    p2_Plot = Vector{Float64}(undef,0)
+    m2_Plot = Vector{Float64}(undef,0)
+
+    push!(T1_Plot, holdups[1].T-273.15)
+    push!(T2_Plot, holdups[2].T-273.15)
+
+    push!(p1_Plot, holdups[1].p/1e5)
+    push!(p2_Plot, holdups[2].p/1e5)
+
+    push!(m1_Plot, holdups[1].moles*holdups[1].mw/1000)
+    push!(m2_Plot, holdups[2].moles*holdups[2].mw/1000)
 
     for istep=1:nstep
 
-        holdupsLast = holdups
-
+        println("")
+        println("Step: $(istep)")
+        
         for ih = eachindex(holdups)
-            ΔsLast = 0.0
-            ΔsError = 1
-            while(ΔsError > 0.001)
-                ps = holdupsLast[ih].p - Δp
-                Ts = holdupsLast[ih].T - ΔT[ih]
-                zs = holdupsLast[ih].z
-                Δs = ΔQ[ih]*log(Ts/holdupsLast[ih].T)/(Ts - holdupsLast[ih].T)
-                ΔsError = abs(Δs - ΔsLast)
-                ΔsLast = Δs
-                ss = holdupsLast[ih].s + Δs
 
-            #    println("ps = $(ps)")
-            #    println("Ts = $(Ts)")
-            #    println("Δs = $(Δs)")
-            #    println("ΔsError = $(ΔsError)")
-            #    println("ss = $(ss)")
+            println("")
+            ps = holdups[ih].p - Δp
+            println("holdup[$(ih)]")
 
-                function Qs(model,ps,Ts,zs,ss)
-                    fr = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
-                    gs = fr.data.g
-                    return (gs*Ts + ss*Ts/Clapeyron.R̄),fr.fractions
+            if holdups[ih].moles > 0.0
+
+                ΔsLast = 0.0
+                ΔsError = 1
+                println("entropy iteration")
+                is = 0
+                Ts = holdups[ih].T + ΔT[ih]
+                while(ΔsError > 0.001)
+                    is += 1
+                #    Ts = holdups[ih].T + ΔT[ih]
+                    zs = holdups[ih].z
+                    Δs = ΔQ[ih]*log(Ts/holdups[ih].T)/(Ts - holdups[ih].T)
+                    ΔsError = abs(Δs - ΔsLast)
+                    ΔsLast = Δs
+                    ss = holdups[ih].s + Δs
+
+                    println("entropy step $(is)")
+                    println("ps = $(ps)")
+                    println("Ts = $(Ts)")
+                    println("ΔsError = $(ΔsError)")
+                    println("ss = $(ss)")
+
+                    function Qs(model,p,T,x,sspec)
+                        fr = Clapeyron.tp_flash_impl(model,p,T,x, HELDTPFlash(verbose = false))
+                        g = fr.data.g
+                        return (g*T + sspec*T/Clapeyron.R̄),fr.fractions
+                    end
+
+                    function psflashmin(T)
+                        Q,β = Qs(model,ps,T,zs,ss)
+                        return -Q,length(β)
+                    end
+
+                    function psflashmin2(T)
+                        Q,β = Qs(model,ps,T,zs,ss)
+                        return -Q
+                    end
+
+                    Ta = Ts + 2.0*ΔT[ih]
+                    Qa,Npa = psflashmin(Ta)
+                    Tb = Ts
+                    Qb,Npb = psflashmin(Tb)
+                    Tc = Ts - 2.0*ΔT[ih]
+                    Qc,Npc = psflashmin(Tc)
+
+                    #Ta, Tb, Tc, Qa, Qb, Qc, Npa, Npb , Npc = bracketmin(psflashmin,Ta,Tc)
+
+                #    println("Ta = $(Ta - 273.15) deg C, Qa = $(Qa) J/mol/K, Npa = $(Npa)")
+                #    println("Tb = $(Tb - 273.15) deg C, Qb = $(Qb) J/mol/K, Npb = $(Npb)")
+                #    println("Tc = $(Tc - 273.15) deg C, Qc = $(Qc) J/mol/K, Npc = $(Npc)")
+
+                    bmres = brentmin(psflashmin2, Ta, Tc)
+                    ΔT[ih] = bmres[1] - holdups[ih].T
+                    Ts = bmres[1]
+
                 end
 
-                function psflashmin(T)
-                    Q,β = Qs(model,ps,T,zs,ss)
-                    return -Q,length(β)
-                end
+                    holdups[ih].p = ps
+                    holdups[ih].T = Ts
+                #    holdups[ih].z = zs
+                    flash = Clapeyron.tp_flash_impl(model,holdups[ih].p,holdups[ih].T,holdups[ih].z, HELDTPFlash(verbose = false))
+                #    println("flash[$(ih)] = $(flash)")
+                    βs,mws,mwts,vs,vts,hs,hts,ss,sts,xs  = get_props(model,flash)
+                    holdups[ih].mw = mwts
+                    holdups[ih].v  = vts
+                    holdups[ih].h  = hts
+                    holdups[ih].s  = sts
+                    holdups[ih].volume  = holdups[ih].moles*holdups[ih].v
+                    phases = Vector{phase}(undef,0)
+                    for ip = eachindex(βs)      
+                        push!(phases, phase(βs[ip],βs[ip]*holdups[ih].moles*vs[ip],βs[ip]*holdups[ih].moles,mws[ip],vs[ip],hs[ip],ss[ip],xs[ip]))
+                    end
+                    holdups[ih].phases = phases
 
-                function psflashmin2(T)
-                    Q,β = Qs(model,ps,T,zs,ss)
-                    return -Q
-                end
-
-                Ta = Ts - ΔT[ih]/2
-                Tb = Ts
-                Tc = Ts + ΔT[ih]/2
-
-                Ta, Tb, Tc, Qa, Qb, Qc, Npa, Npb , Npc = bracketmin(psflashmin,Ta,Tc)
-
-            #    println("Ta = $(Ta - 273.15) deg C, Qa = $(Qa) J/mol/K, Npa = $(Npa)")
-            #    println("Tb = $(Tb - 273.15) deg C, Qb = $(Qb) J/mol/K, Npa = $(Npb)")
-            #    println("Tc = $(Tc - 273.15) deg C, Qc = $(Qc) J/mol/K, Npa = $(Npc)")
-
-                bmres = brentmin(psflashmin2, Ta, Tc)
-                holdups[ih].p = ps
-                ΔT[ih] = Ts - bmres[1]
-            #    println("ΔT[$(ih)] = $(ΔT[ih])")
-                holdups[ih].T = bmres[1]
-                holdups[ih].z = zs
-                flash = Clapeyron.tp_flash_impl(model,holdups[ih].p,holdups[ih].T,holdups[ih].z, HELDTPFlash(verbose = false))
-            #    println("flash[$(ih)] = $(flash)")
-                mws,vs,hs,ss = get_propsnew(model,flash)
-                holdups[ih].mw = mws
-                holdups[ih].v = vs
-                holdups[ih].h = hs
-                holdups[ih].s = ss
-                holdups[ih].flash = flash   
             end
 
             # mix produced vapour and liquid from each phase this is isenthalpic process
@@ -647,20 +857,78 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
             # 
             # for a phase to disappear then the flashes for all holupds must have produced less phases than current holdups. Likewise if a phase reappers then the number of phases or 
             # one of the holdups must be greater that the total holdups
-
-            holdupsLast = holdups
+            
             println("")
+            println("Results:")
             println("ps[$(ih)] = $(holdups[ih].p/1e5) bara")
             println("ΔT[$(ih)] = $(ΔT[ih])")
             println("Ts[$(ih)] = $(holdups[ih].T-273.15) deg C")
             println("holdups[$(ih)] = $(holdups[ih])")
+
         end
+
+        # assume vapour removal
+    #    println("holdups[1].volume = $(holdups[1].volume)")
+    #    println("holdups[2].volume = $(holdups[2].volume)")
+        volume_new = (holdups[1].volume + holdups[2].volume)
+    #    println("volume_new = $(volume_new)")
+        Δv = volume_new - volume
+        println("Δv = $(Δv)")
+        holdups[1].volume -= Δv
+        holdups[1].moles = holdups[1].volume/holdups[1].v
+
+        if holdups[1].moles > 0.0 && holdups[2].moles > 0.0
+            ΔQ[1] = 100*(holdups[2].T - holdups[1].T)/holdups[1].moles
+            ΔQ[2] = 100*(holdups[1].T - holdups[2].T)/holdups[2].moles
+        else
+            ΔQ[1] = 0.0
+            ΔQ[2] = 0.0
+        end
+
+        push!(T1_Plot, holdups[1].T-273.15)
+        push!(T2_Plot, holdups[2].T-273.15)
+
+        push!(p1_Plot, holdups[1].p/1e5)
+        push!(p2_Plot, holdups[2].p/1e5)
+
+        push!(m1_Plot, holdups[1].moles*holdups[1].mw/1000)
+        push!(m2_Plot, holdups[2].moles*holdups[2].mw/1000)
+
     end
+
+    p1 = plot(
+    label=["vapour" "liquid"], 
+    [T1_Plot,T2_Plot],
+    [p1_Plot,p2_Plot],
+    xlabel = "Temperaure [deg C]",
+    ylabel = "Pressure [bara]",
+    left_margin = 10Plots.mm,
+    bottom_margin = 10Plots.mm,
+    xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+    grid = :on,linewidth=3,
+    size=(1600,1200))
+
+    display(p1)
+
+    p2 = plot(
+    label=["vapour" "liquid"], 
+    [m1_Plot,m2_Plot],
+    [p1_Plot,p2_Plot],
+    xlabel = "Mass [tons]",
+    ylabel = "Pressure [bara]",
+    left_margin = 10Plots.mm,
+    bottom_margin = 10Plots.mm,
+    xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+    grid = :on,linewidth=3,
+    size=(1600,1200))
+
+    display(p2)
 
 end
 
 #pe = 8.0e5
 #nstep = 3*19
-pe = 26.0e5
-nstep = 3
+delta_P = 0.25e5
+pe = 25.0e5
+nstep = (ps - pe)/delta_P
 BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)

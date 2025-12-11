@@ -17,6 +17,9 @@ Base.@kwdef struct HELDTPFlash <: TPFlashMethod
     max_HELD_iters::Int = 0
     max_trust_region_iters::Int = 0
     tol::Float64 = 0.01*sqrt(eps(Float64))
+	# tol clean was sqrt(tol) which was too big near phase boundaries and it removed
+	# phases guesses that were valid. its reduced to help with this issue
+	tol_clean::Float64 = 10.0*sqrt(eps(Float64))
     HELD_tol::Float64 = sqrt(eps(Float64))
 	add_pure_guess::Bool = true
     add_anti_pure_guess::Bool = true
@@ -41,6 +44,7 @@ function tp_flash_impl(model::EoSModel, p, T, n, method::HELDTPFlash)
 		max_trust_region_iters = method.max_trust_region_iters
 	end
 	tol = method.tol
+	tol_clean = method.tol_clean
 	HELD_tol = method.HELD_tol
 	if length(method.add_pure_component) == 0 || length(method.add_pure_component) !== length(n)
 		add_pure_component = fill(true,length(n))
@@ -55,6 +59,7 @@ function tp_flash_impl(model::EoSModel, p, T, n, method::HELDTPFlash)
 	if verbose == true
 		println("HELD  - Setup:")
 		println("HELD  - trust region tolerence = $(tol)")
+		println("HELD  - Cleaning tolerence = $(tol_clean)")
 		println("HELD  - HELD tolerence = $(HELD_tol)")
 		println("HELD  - add_pure_guess = $(add_pure_guess)")
 		println("HELD  - add_anti_pure_guess = $(add_anti_pure_guess)")
@@ -62,8 +67,21 @@ function tp_flash_impl(model::EoSModel, p, T, n, method::HELDTPFlash)
 		println("HELD  - add_random_guess = $(add_random_guess)")
 		println("HELD  - add_all_guess = $(add_all_guess)")
 	end
-	beta,xp,vp,Gsol = HELD_impl(model,p,T,z₀,max_HELD_iters,max_trust_region_iters,tol,HELD_tol,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess,verbose)
-#    return beta,xp,vp,Gsol 
+	beta,xp,vp,Gsol = HELD_impl(model,
+								p,
+								T,
+								z₀,
+								max_HELD_iters,
+								max_trust_region_iters,
+								tol,
+								tol_clean,
+								HELD_tol,
+								add_pure_guess,
+								add_anti_pure_guess,
+								add_pure_component,
+								add_random_guess,
+								add_all_guess,verbose)
+ 
 	return FlashResult(xp,beta,vp,FlashData(p,T,Gsol))
 end
 
@@ -590,6 +608,7 @@ function HELD_impl(model,p,T,z₀,
 	max_HELD_iters,
 	max_trust_region_iters,
 	tol,
+	tol_clean,
 	HELD_tol,
 	add_pure_guess,
 	add_anti_pure_guess,
@@ -656,7 +675,7 @@ function HELD_impl(model,p,T,z₀,
     	end
     end
     
-    fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol, verbose)
+    fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol_clean, verbose)
 
 	#=
 	# with the unique solution ensure the rho solution is correct based on rho solver this needs a fmin update
@@ -931,7 +950,7 @@ function HELD_impl(model,p,T,z₀,
 
     		end
 		
-			fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol, verbose)
+			fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol_clean, verbose)
 			
 			if length(fmins_unique) < 1 || λStalling
 				use_global_solution = true
@@ -1018,7 +1037,7 @@ function HELD_impl(model,p,T,z₀,
     				end
 				end
 				
-				fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol, verbose)
+				fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol_clean, verbose)
 
 				if length(fmins_unique) > 0
 
@@ -1438,7 +1457,7 @@ function HELD_impl(model,p,T,z₀,
     
 end
 
-function HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol, verbose)
+function HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol_clean, verbose)
     iremove = fill(false,length(fmins))
     iminfound = fill(false,length(fmins))
     for ir = 1:length(fmins)    	
@@ -1458,7 +1477,7 @@ function HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol, verbose)
     			if !iremove[imins] && !iminfound[imins]
     				distances = xmins[imins] .- xmins[imin]
     				distance = norm(distances, Inf)
-    				if distance < sqrt(tol)
+    				if distance < tol_clean
     					iremove[imins] = true
     				end
     			end
@@ -1470,7 +1489,7 @@ function HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol, verbose)
     	if iminfound[imins]
     		distances = xmins[imins] .- x₀
     		distance = norm(distances, Inf)
-    		if distance < sqrt(tol)
+    		if distance < tol_clean
     			iminfound[imins] = false
     		end
     	end
