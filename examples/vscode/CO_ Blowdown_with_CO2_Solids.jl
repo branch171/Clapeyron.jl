@@ -784,11 +784,11 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
                     end
 
                     Ta = Ts + 2.0*ΔT[ih]
-                    Qa,Npa = psflashmin(Ta)
+                #    Qa,Npa = psflashmin(Ta)
                     Tb = Ts
-                    Qb,Npb = psflashmin(Tb)
+                #    Qb,Npb = psflashmin(Tb)
                     Tc = Ts - 2.0*ΔT[ih]
-                    Qc,Npc = psflashmin(Tc)
+                #    Qc,Npc = psflashmin(Tc)
 
                     #Ta, Tb, Tc, Qa, Qb, Qc, Npa, Npb , Npc = bracketmin(psflashmin,Ta,Tc)
 
@@ -867,11 +867,133 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
 
         end
 
+        # recombine vapour with liquid phase vapour and liquid with vapour phase liquid
+        cm = Vector{Float64}(undef,0)
+        mt1 = holdups[1].moles
+        β1 = holdups[1].phases[1].β
+        z1 = holdups[1].phases[1].z
+        h1 = holdups[1].phases[1].h
+        h1m = 0.0
+        for ic = eachindex(holdups[1].z)
+            if length(holdups[2].phases) > 1
+                mt2 = holdups[2].moles
+                β2 = holdups[2].phases[1].β
+                z2 = holdups[2].phases[1].z
+                h2 = holdups[2].phases[1].h
+                push!(cm,β1*mt1*z1[ic] + β2*mt2*z2[ic])
+                h1m = β1*mt1*h1 + β2*mt2*h2
+            else
+                push!(cm,β1*mt1*z1[ic])
+                h1m = β1*mt1*h1
+            end
+        end
+        mt1 = sum(cm)
+        z1 = Vector{Float64}(undef,0)
+        for ic = eachindex(holdups[1].z)
+            push!(z1,cm[ic]/mt1)
+        end
+        h1 = h1m/mt1
+        holdups[1].moles = mt1
+        holdups[1].h = h1
+        holdups[1].z = z1
+    #    println("mt1 = $(mt1) moles")
+    #    println("z1 = $(z1)")
+    #    println("h1 = $(h1) J/mol")
+        cm = Vector{Float64}(undef,0)
+        h2 = 0.0
+        if length(holdups[2].phases) > 1
+            mt2 = holdups[2].moles
+            β2 = holdups[2].phases[2].β
+            z2 = holdups[2].phases[2].z
+            h2 = holdups[2].phases[2].h
+        else
+            mt2 = holdups[2].moles
+            β2 = holdups[2].phases[1].β
+            z2 = holdups[2].phases[1].z
+            h2 = holdups[2].phases[1].h
+        end
+        h2m = 0.0
+        for ic = eachindex(holdups[2].z)
+            if length(holdups[1].phases) > 1
+                mt1 = holdups[1].moles
+                β1 = holdups[1].phases[2].β
+                z1 = holdups[1].phases[2].z
+                h1 = holdups[1].phases[2].h
+                push!(cm,β2*mt2*z2[ic] + β1*mt1*z1[ic])
+                h2m = β2*mt2*h2 + β1*mt1*h1
+            else
+                push!(cm,β2*mt2*z2[ic])
+                h2m = β2*mt2*h2
+            end
+        end
+        mt2 = sum(cm)
+        z2 = Vector{Float64}(undef,0)
+        for ic = eachindex(holdups[2].z)
+            push!(z2,cm[ic]/mt2)
+        end
+        h2 = h2m/mt2
+        holdups[2].moles = mt2
+        holdups[2].h = h2
+        holdups[2].z = z2
+    #    println("mt2 = $(mt2) moles")
+    #    println("z2 = $(z2)")
+    #    println("h2 = $(h2) J/mol")
+
+        # Ok we have all we need to do a phflash and reset the holpups with the new conditions after separation and mixing
+
+                for ih = eachindex(holdups)
+
+                    hs = holdups[ih].h
+                    Ts = holdups[ih].T
+                    ps = holdups[ih].p
+                    zs = holdups[ih].z
+
+                    function Qh(model,p,T,x,hspec)
+                        fr = Clapeyron.tp_flash_impl(model,p,T,x, HELDTPFlash(verbose = false))
+                        g = fr.data.g
+                        return (g - hspec/Clapeyron.R̄/T),fr.fractions
+                    end
+
+                    function phflashmin(T)
+                        Q,β = Qh(model,ps,T,zs,hs)
+                        return -Q,length(β)
+                    end
+
+                    function phflashmin2(T)
+                        Q,β = Qh(model,ps,T,zs,hs)
+                        return -Q
+                    end
+
+                    Ta = Ts + 2.0*ΔT[ih]
+                #    Qa,Npa = phflashmin(Ta)
+                    Tb = Ts
+                #    Qb,Npb = phflashmin(Tb)
+                    Tc = Ts - 2.0*ΔT[ih]
+                #    Qc,Npc = phflashmin(Tc)
+
+                    bmres = brentmin(phflashmin2, Ta, Tc)
+
+                    holdups[ih].T = bmres[1]
+                #    println("Ts[$(ih)] = $(bmres[1]) K")
+
+                    flash = Clapeyron.tp_flash_impl(model,holdups[ih].p,holdups[ih].T,holdups[ih].z, HELDTPFlash(verbose = false))
+                    βs,mws,mwts,vs,vts,hs,hts,ss,sts,xs  = get_props(model,flash)
+                    holdups[ih].mw = mwts
+                    holdups[ih].v  = vts
+                    holdups[ih].h  = hts
+                    holdups[ih].s  = sts
+                    holdups[ih].volume  = holdups[ih].moles*holdups[ih].v
+                    phases = Vector{phase}(undef,0)
+                    for ip = eachindex(βs)      
+                        push!(phases, phase(βs[ip],βs[ip]*holdups[ih].moles*vs[ip],βs[ip]*holdups[ih].moles,mws[ip],vs[ip],hs[ip],ss[ip],xs[ip]))
+                    end
+                    holdups[ih].phases = phases
+
+                end
+        #
+
         # assume vapour removal
-    #    println("holdups[1].volume = $(holdups[1].volume)")
-    #    println("holdups[2].volume = $(holdups[2].volume)")
         volume_new = (holdups[1].volume + holdups[2].volume)
-    #    println("volume_new = $(volume_new)")
         Δv = volume_new - volume
         println("Δv = $(Δv)")
         holdups[1].volume -= Δv
@@ -929,6 +1051,6 @@ end
 #pe = 8.0e5
 #nstep = 3*19
 delta_P = 0.25e5
-pe = 25.0e5
+pe = 10.0e5
 nstep = (ps - pe)/delta_P
 BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
