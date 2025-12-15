@@ -144,63 +144,20 @@ function bracketmin(func::Function,a::Float64, b::Float64)
         npa = npb
         npb = itmp
     end
-    cx = bx+gold*(bx - ax)
+    dx = (bx - ax)
+    cx = bx + sign(dx)*min(gold*abs(bx - ax),5.0)
     fc, npc = func(cx)
-    if (fb < fc) 
-        return ax,bx,cx,fa,fb,fc,npa,npb,npc
-    end
     while (fb > fc)
-        r = (bx-ax)*(fb-fc)
-        q = (bx-cx)*(fb-fa)
-        u = bx - ((bx-cx)*q - (bx-ax)*r)/(2*signab(max(abs(q-r),tiny),q-r))
-        ulim = bx + gold*(cx-bx)
-        if ((bx-u)*(u-cx) > 0.0)
-            fu,npu = func(u)
-            if (fu < fc)
-                ax = bx
-                bx = u
-                fa = fb
-                fb = fu
-                npa = npb
-                npb = npu
-                return ax,bx,cx,fa,fb,fc,npa,npb,npc
-            elseif (fu > fb)
-                cx = u
-                fc = fu
-                npc = npu
-                return ax,bx,cx,fa,fb,fc,npa,npb,npc
-            end
-            u = cx+gold*(cx-bx)
-            fu,npu = func(u)
-        elseif ((cx-u)*(u-ulim) > 0.0)
-            fu,npu =func(u)
-            if (fu < fc)
-                bx = cx
-                cx = u
-                u = u+gold*(u-cx)
-                fb = fc
-                fc = fu
-                npb = npc
-                npc = npu
-                fu,npu = func(u)
-            end
-        elseif ((u-ulim)*(ulim-cx) >= 0.0)
-            u = ulim
-            fu,npu = func(u)
-        else
-            u = cx+gold*(cx-bx)
-            fu,npu =func(u)
-        end
         ax = bx
-        bx = cx
-        cx = u
         fa = fb
+        bx = cx
         fb = fc
-        fc = fu
-        npa = npb
-        npb = npc
-        npc = npu
+        cx =  bx + sign(dx)*min(gold*abs(bx - ax),5.0)
+        fc, npc = func(cx)
+    #    println("Ta = $(ax - 273.15) deg C, Qa = $(fa) J/mol/K, Npa = $(npa)")
+    #    println("Tc = $(cx - 273.15) deg C, Qc = $(fc) J/mol/K, Npc = $(npc)")
     end
+    return ax,cx,fa,fc,npa,npc
 end
 
 function brentmin(
@@ -607,6 +564,116 @@ println("Check ps flash at inital condition")
 println("Check complete")
 =#
 
+function orificeFlow(model,pin,Tin,zin,pout,d0,d1)
+
+    S0 = 3.14159/4*d0^2
+    S1 = 3.14159/4*d1^2
+
+    flash = Clapeyron.tp_flash_impl(model,pin,Tin,zin, HELDTPFlash(verbose = false))
+    βin,mwin,mwtin,vin,vtin,hin,htin,sin,stin,xin = get_props(model,flash)
+
+    Cd = 0.98
+
+    rhoin = 1.0/vtin
+
+    Δp = 0.5e5
+    ns = Int(floor((pin - pout)/Δp))
+    println("ns = $(ns)")
+    Δp = (pin - pout)/ns
+    ΔT = 0.6
+
+    ps = pin
+    Ts = Tin
+    zs = zin
+    ss = stin
+
+    pstep = zeros(ns)
+    flowstep =  zeros(ns)
+
+    Ts_old = Ts
+    for is = 1:ns
+        ps -= Δp
+        Ts -= ΔT
+
+        function Qs(model,p,T,x,sspec)
+            fr = Clapeyron.tp_flash_impl(model,p,T,x, HELDTPFlash(verbose = false))
+            g = fr.data.g
+            return (g*T + sspec*T/Clapeyron.R̄),fr.fractions
+        end
+
+        function psflashmin(T)
+            Q,β = Qs(model,ps,T,zs,ss)
+            return -Q,length(β)
+        end
+
+        function psflashmin2(T)
+            Q,β = Qs(model,ps,T,zs,ss)
+            return -Q
+        end
+
+        ΔTs = -0.1
+        Ta = Ts + ΔTs
+        Qa,Npa = psflashmin(Ta)
+        Tc = Ts - ΔTs
+        Qc,Npc = psflashmin(Tc)
+
+        Ta, Tc, Qa, Qc, Npa, Npc = bracketmin(psflashmin,Ta,Tc)
+
+        println("Ta = $(Ta - 273.15) deg C, Qa = $(Qa) J/mol/K, Npa = $(Npa)")
+        println("Tc = $(Tc - 273.15) deg C, Qc = $(Qc) J/mol/K, Npc = $(Npc)")
+
+        bmres = brentmin(psflashmin2, Ta, Tc)
+        ΔT = bmres[1] - Ts_old
+    #    println("ΔT = $(ΔT) deg C")
+        Ts = bmres[1]
+        Ts_old = Ts
+
+        flash = Clapeyron.tp_flash_impl(model,ps,Ts,zs, HELDTPFlash(verbose = false))
+        βss,mwss,mwtss,vss,vtss,hss,htss,sss,stss,xss  = get_props(model,flash)
+
+        rhoss = 1.0/vtss
+
+        Δh = htin - htss
+        flow = Cd*S0*rhoss*sqrt(2.0*abs(Δh)/(1.0 - (rhoss/rhoin*S0/S1)^2))
+
+        pstep[is] = ps/1e5
+        flowstep[is] = flow
+
+        println("βss = $(βss)")
+        println("s in = $(ss)")
+        println("s out = $(stss)")
+        println("Δh = $(Δh) J/mol")
+        println("Δv = $(vtss - vtin) m3/mol")
+        println("(pin - pout)/rho = $(2.0*(pin - ps)/(rhoin+rhoss)) m3/mol")
+
+        println("rhoin = $(rhoin) mol/m3")
+        println("rhoss = $(rhoss) mol/m3")
+
+        println("htin = $(htin) J/mol, htss = $(htss) J/mol, flow = $(flow*mwtin) kg/s")
+        println("ΔT = $(ΔT) deg C, ps = $(ps/1e5) bara, flow = $(flow) mol/s")
+        println("Ts = $(Ts - 273.15) deg C")
+
+    end
+
+    p1 = plot(
+    label=["isentropic curve"], 
+    [pstep],
+    [flowstep],
+    xlabel = "Pressure [bara]",
+    ylabel = "Flow [mol/s]",
+    left_margin = 10Plots.mm,
+    bottom_margin = 10Plots.mm,
+    xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+    grid = :on,linewidth=3,
+    size=(1600,1200))
+
+    display(p1)
+
+end
+
+orificeFlow(model,ps,-25.0+273.15,zs,10e5,2*25.4/1000.0,8.0*25.4/1000.0)
+
+#=
 function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
 
     mix_Tbub = bubble_temperature(model,ps,zs)
@@ -1054,3 +1121,5 @@ delta_P = 0.25e5
 pe = 10.0e5
 nstep = (ps - pe)/delta_P
 BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
+
+=#
