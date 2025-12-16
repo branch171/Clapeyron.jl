@@ -125,14 +125,12 @@ function signab(a::Float64, b::Float64)
     return sign(b)*abs(a)
 end
 
-function bracketmin(func::Function,a::Float64, b::Float64)
-    glimit = 100.0
+function bracketmin(func::Function,a::Float64, b::Float64, xmax::Float64, verbose::Bool)
     gold = 1.618034
-    tiny = 1.0e-20
     ax = a
     bx = b
-    fa,npa = func(ax)
-    fb,npb = func(bx)
+    fa = func(ax)
+    fb = func(bx)
     if fb > fa
         tmp = ax
         ax = bx
@@ -140,30 +138,49 @@ function bracketmin(func::Function,a::Float64, b::Float64)
         tmp = fa
         fa = fb
         fb = tmp
-        itmp = npa
-        npa = npb
-        npb = itmp
+    end
+    mx = (bx + ax)/2.0
+    fm = func(mx)
+    if (fm < fb)
+        if verbose
+            println("all ready a braket...")
+            println("ax = $(ax), fa = $(fa)")
+            println("mx = $(ax), fm = $(fm)")
+            println("bx = $(bx), fb = $(fb)")
+        end
+        return ax,bx,fa,fb
     end
     dx = (bx - ax)
-    cx = bx + sign(dx)*min(gold*abs(bx - ax),5.0)
-    fc, npc = func(cx)
+    cx = bx + sign(dx)*min(gold*abs(bx - ax),xmax)
+    fc = func(cx)
     while (fb > fc)
         ax = bx
         fa = fb
         bx = cx
         fb = fc
-        cx =  bx + sign(dx)*min(gold*abs(bx - ax),5.0)
-        fc, npc = func(cx)
-    #    println("Ta = $(ax - 273.15) deg C, Qa = $(fa) J/mol/K, Npa = $(npa)")
-    #    println("Tc = $(cx - 273.15) deg C, Qc = $(fc) J/mol/K, Npc = $(npc)")
+        cx =  bx + sign(dx)*min(gold*abs(bx - ax),xmax)
+        fc = func(cx)
+        if verbose
+            println("searching...")
+            println("ax = $(ax), fa = $(fa)")
+            println("bx = $(bx), fa = $(fb)")
+            println("cx = $(cx), fc = $(fc)")
+        end
     end
-    return ax,cx,fa,fc,npa,npc
+    if verbose
+        println("found...")
+        println("ax = $(ax), fa = $(fa)")
+        println("bx = $(bx), fa = $(fb)")
+        println("cx = $(cx), fc = $(fc)")
+    end
+    return ax,cx,fa,fc
 end
 
 function brentmin(
     f,
     x_lower::T,
     x_upper::T,
+    verbose::Bool,
     rel_tol::T = sqrt(eps(T)),
     abs_tol::T = eps(T),
     iterations::Integer = 1_000,
@@ -293,7 +310,9 @@ function brentmin(
                 old_old_minimum = new_f
             end
         end
-    #    println("x_lower = $(x_lower), new_minimizer = $(new_minimizer), x_upper = $(x_upper)")
+        if verbose
+            println("x_lower = $(x_lower), new_minimizer = $(new_minimizer), x_upper = $(x_upper)")
+        end
     end
 
     return new_minimizer, new_minimum
@@ -422,7 +441,11 @@ Ts = Tf
 zCO2 = 0.997275
 zs = [zCO2,1.0-zCO2]
 
-volume = 5500/9
+tank_volume = 5500/9
+
+tank_radius = 5.3/2
+tank_xsarea = pi*tank_radius^2
+tank_length = tank_volume/tank_xsarea
 
 level = zeros(2)
 level[1] = 0.95
@@ -564,7 +587,7 @@ println("Check ps flash at inital condition")
 println("Check complete")
 =#
 
-function orificeFlow(model,pin,Tin,zin,pout,d0,d1)
+function orificeFlowOld(model,pin,Tin,zin,pout,d0,d1)
 
     S0 = 3.14159/4*d0^2
     S1 = 3.14159/4*d1^2
@@ -576,14 +599,16 @@ function orificeFlow(model,pin,Tin,zin,pout,d0,d1)
 
     rhoin = 1.0/vtin
 
-    Δp = 0.5e5
-    ns = Int(floor((pin - pout)/Δp))
+    Δp = 0.1e5
+    pstart = 17.0e5
+    pend = 16.0e5
+    ns = Int(floor((pstart - pend)/Δp))
     println("ns = $(ns)")
-    Δp = (pin - pout)/ns
+    Δp = (pstart - pend)/ns
     ΔT = 0.6
 
-    ps = pin
-    Ts = Tin
+    ps = pstart
+    Ts = -25.0+273.15
     zs = zin
     ss = stin
 
@@ -601,28 +626,28 @@ function orificeFlow(model,pin,Tin,zin,pout,d0,d1)
             return (g*T + sspec*T/Clapeyron.R̄),fr.fractions
         end
 
-        function psflashmin(T)
-            Q,β = Qs(model,ps,T,zs,ss)
-            return -Q,length(β)
-        end
+    #    function psflashmin(T)
+    #        Q,β = Qs(model,ps,T,zs,ss)
+    #        return -Q,length(β)
+    #    end
 
-        function psflashmin2(T)
+        function psflashmin(T)
             Q,β = Qs(model,ps,T,zs,ss)
             return -Q
         end
 
         ΔTs = -0.1
         Ta = Ts + ΔTs
-        Qa,Npa = psflashmin(Ta)
+     #   Qa,Npa = psflashmin(Ta)
         Tc = Ts - ΔTs
-        Qc,Npc = psflashmin(Tc)
+     #   Qc,Npc = psflashmin(Tc)
 
-        Ta, Tc, Qa, Qc, Npa, Npc = bracketmin(psflashmin,Ta,Tc)
+        Ta, Tc, Qa, Qc = bracketmin(psflashmin,Ta,Tc,5.0,false)
 
-        println("Ta = $(Ta - 273.15) deg C, Qa = $(Qa) J/mol/K, Npa = $(Npa)")
-        println("Tc = $(Tc - 273.15) deg C, Qc = $(Qc) J/mol/K, Npc = $(Npc)")
+        println("Ta = $(Ta - 273.15) deg C, Qa = $(Qa) J/mol/K")
+        println("Tc = $(Tc - 273.15) deg C, Qc = $(Qc) J/mol/K")
 
-        bmres = brentmin(psflashmin2, Ta, Tc)
+        bmres = brentmin(psflashmin, Ta, Tc, false)
         ΔT = bmres[1] - Ts_old
     #    println("ΔT = $(ΔT) deg C")
         Ts = bmres[1]
@@ -671,10 +696,98 @@ function orificeFlow(model,pin,Tin,zin,pout,d0,d1)
 
 end
 
-orificeFlow(model,ps,-25.0+273.15,zs,10e5,2*25.4/1000.0,8.0*25.4/1000.0)
+function orificeFlow(model,pin,Tin,zin,pout,d0,d1,Cd,verbose)
 
-#=
-function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
+    S0 = 3.14159/4*d0^2
+    S1 = 3.14159/4*d1^2
+
+    flash = Clapeyron.tp_flash_impl(model,pin,Tin,zin, HELDTPFlash(verbose = false))
+    βin,mwin,mwtin,vin,vtin,hin,htin,sin,stin,xin = get_props(model,flash)
+
+    rhoin = 1.0/vtin
+    Δp = (pin - pout)/50
+    Ts = Tin
+
+    function flowcalc(pf)
+        function Qs(model,p,T,x,sspec)
+            fr = Clapeyron.tp_flash_impl(model,p,T,x, HELDTPFlash(verbose = false))
+            g = fr.data.g
+            return (g*T + sspec*T/Clapeyron.R̄),fr.fractions
+        end
+        function psflashmin(T)
+            Q,β = Qs(model,pf,T,zin,stin)
+            return -Q
+        end
+        ΔTs = -0.1
+        Ta = Ts + ΔTs
+        Tc = Ts - ΔTs
+        Ta,Tc,Qa,Qc = bracketmin(psflashmin,Ta,Tc,5.0,false)
+        bmres = brentmin(psflashmin, Ta, Tc, false)
+        Ts = bmres[1]
+        flash = Clapeyron.tp_flash_impl(model,pf,Ts,zin, HELDTPFlash(verbose = false))
+        βss,mwss,mwtss,vss,vtss,hss,htss,sss,stss,xss  = get_props(model,flash)
+        rhoss = 1.0/vtss
+        Δh = htin - htss
+        flow = Cd*S0*rhoss*sqrt(2.0*abs(Δh)/(1.0 - (rhoss/rhoin*S0/S1)^2))
+        Q = -flow
+        return Q
+    end
+
+    flow1 = 0.0
+    p2 = (pin + pout)/2.0
+    Q2 = flowcalc(p2)
+    T2 = Ts
+#    println("T2 = $(T2 - 273.15) deg C")
+    Q3 = flowcalc(pout)
+    T3 = Ts
+#    println("T3 = $(T3 - 273.15) deg C")
+
+#    println("flow1 = $(flow1) mol/s, pin = $(pin/1e5) bara")
+#    println("flow2 = $(-Q2) mol/s, p2 = $(p2/1e5) bara")
+#    println("flow3 = $(-Q3) mol/s, p3 = $(pout/1e5) bara")
+
+    if Q2 < Q3
+        if verbose
+            println("critical flow detected")
+        end
+        Ts = T2
+        pa = p2 + Δp
+        pc = p2 - Δp
+        pa,pc,Qa,Qc = bracketmin(flowcalc,pa,pc,1e5,verbose)
+        bmres = brentmin(flowcalc,pa,pc,verbose)
+        if verbose
+            println("bracket...")
+            println("flowa = $(-Qa) mol/s, pa = $(pa/1e5) bara")
+            println("flowc = $(-Qc) mol/s, pc = $(pc/1e5) bara")
+            println("critical flow...")
+            println("flow_critical = $(-bmres[2]) mol/s, pcritical = $(bmres[1]/1e5) bara")
+        end
+        return -bmres[2],bmres[1],Ts
+    else
+        if verbose
+            println("flow = $(-Q3) mol/s")
+        end
+        return -Q3, pout,T3
+    end
+
+end
+
+pin = ps
+Tin = Ts
+zin = zs
+pout = 1.01325e5
+
+#orificeFlowOld(model,pin,Tin,zin,pout,2*25.4/1000.0,8.0*25.4/1000.0)
+
+flow,pf,Tf = orificeFlow(model,pin,Tin,zin,pout,2*25.4/1000.0,8.0*25.4/1000.0,0.98,true)
+
+println("orifice flow = $(flow) mol/s")
+println("orifice critical pressure = $(pf/1e5) bara")
+println("orifice critical Temperature = $(Tf - 273.15) deg C")
+println("orifice critical ratio pf/pin = $(pf/pin)")
+
+
+function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, level, pe, nstep)
 
     mix_Tbub = bubble_temperature(model,ps,zs)
     Tbub = mix_Tbub[1]
@@ -682,6 +795,7 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
     Tdew = mix_Tdew[1]
 
     holdups = Vector{holdup}(undef,0)
+    tank_xsa_holdups =Vector{Float64}(undef,0)
 
     if Ts <= Tbub
 
@@ -711,7 +825,7 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
         v = vf[1]
         h = Clapeyron.VT_enthalpy(model,v,Ts,x)
         s = Clapeyron.VT_entropy(model,v,Ts,x)
-        tv = volume
+        tv = t_v
         tm = tv/v
         cm = Vector{Float64}(undef,0)
         for ic = eachindex(x)
@@ -734,7 +848,7 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
         v = vf[1]
         h = Clapeyron.VT_enthalpy(model,v,Ts,y)
         s = Clapeyron.VT_entropy(model,v,Ts,y)
-        tv = volume
+        tv = tank_volume
         tm = tv/v
         cm = Vector{Float64}(undef,0)
         for ic = eachindex(y)
@@ -768,10 +882,26 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
         βf,mwf,mwtf,vf,vtf,hf,htf,sf,stf,xf = get_props(model,flash) 
         for ip = eachindex(βf)
             phases = Vector{phase}(undef,0)
-            push!(phases, phase(1.0,level[ip]*volume,level[ip]*volume/vf[ip],mwf[ip],vf[ip],hf[ip],sf[ip],xf[ip]))
-            push!(holdups, holdup(ps,Ts,level[ip]*volume,level[ip]*volume/vf[ip],mwf[ip],vf[ip],hf[ip],sf[ip],xf[ip],phases))
+            push!(phases, phase(1.0,level[ip]*tank_volume,level[ip]*tank_volume/vf[ip],mwf[ip],vf[ip],hf[ip],sf[ip],xf[ip]))
+            push!(holdups, holdup(ps,Ts,level[ip]*tank_volume,level[ip]*tank_volume/vf[ip],mwf[ip],vf[ip],hf[ip],sf[ip],xf[ip],phases))
+            push!(tank_xsa_holdups, level[ip]*tank_volume/tank_length)
         end
     end
+
+    # level
+    theta = 80/180*pi
+    error = 1.0
+    while (error > 0.0001)
+        f =  (tank_radius^2)*(theta - sin(theta)) - 2.0*tank_xsa_holdups[2]
+        df_dtheta = (tank_radius^2)*(1.0 - cos(theta))
+        theta = theta - f/df_dtheta
+        error = abs(f)
+        println("theta = $(theta), error = $(error)")
+    end
+
+    level[2] = 1.0 - cos(theta/2.0)
+    level[1] = 1.0 - level[2]
+    println("level[2] = $(level[2])")
 
     println("")
     println("Blowndown Function Start:")
@@ -784,6 +914,7 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
     ΔT = fill(-0.33,length(holdups))
     ΔQ = zeros(length(holdups))
 
+    time_Plot = Vector{Float64}(undef,0)
     T1_Plot = Vector{Float64}(undef,0)
     p1_Plot = Vector{Float64}(undef,0)
     m1_Plot = Vector{Float64}(undef,0)
@@ -800,6 +931,9 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
 
     push!(m1_Plot, holdups[1].moles*holdups[1].mw/1000)
     push!(m2_Plot, holdups[2].moles*holdups[2].mw/1000)
+
+    time = 0.0
+    push!(time_Plot, time)
 
     for istep=1:nstep
 
@@ -840,30 +974,22 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
                         return (g*T + sspec*T/Clapeyron.R̄),fr.fractions
                     end
 
-                    function psflashmin(T)
-                        Q,β = Qs(model,ps,T,zs,ss)
-                        return -Q,length(β)
-                    end
+                #    function psflashmin(T)
+                #        Q,β = Qs(model,ps,T,zs,ss)
+                #        return -Q,length(β)
+                #    end
 
-                    function psflashmin2(T)
+                    function psflashmin(T)
                         Q,β = Qs(model,ps,T,zs,ss)
                         return -Q
                     end
 
                     Ta = Ts + 2.0*ΔT[ih]
-                #    Qa,Npa = psflashmin(Ta)
-                    Tb = Ts
-                #    Qb,Npb = psflashmin(Tb)
                     Tc = Ts - 2.0*ΔT[ih]
-                #    Qc,Npc = psflashmin(Tc)
 
-                    #Ta, Tb, Tc, Qa, Qb, Qc, Npa, Npb , Npc = bracketmin(psflashmin,Ta,Tc)
+                    Ta, Tc, Qa, Qc = bracketmin(psflashmin,Ta,Tc,5.0,false)
 
-                #    println("Ta = $(Ta - 273.15) deg C, Qa = $(Qa) J/mol/K, Npa = $(Npa)")
-                #    println("Tb = $(Tb - 273.15) deg C, Qb = $(Qb) J/mol/K, Npb = $(Npb)")
-                #    println("Tc = $(Tc - 273.15) deg C, Qc = $(Qc) J/mol/K, Npc = $(Npc)")
-
-                    bmres = brentmin(psflashmin2, Ta, Tc)
+                    bmres = brentmin(psflashmin, Ta, Tc, false)
                     ΔT[ih] = bmres[1] - holdups[ih].T
                     Ts = bmres[1]
 
@@ -1021,24 +1147,22 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
                         return (g - hspec/Clapeyron.R̄/T),fr.fractions
                     end
 
-                    function phflashmin(T)
-                        Q,β = Qh(model,ps,T,zs,hs)
-                        return -Q,length(β)
-                    end
+                #    function phflashmin(T)
+                #        Q,β = Qh(model,ps,T,zs,hs)
+                #        return -Q,length(β)
+                #    end
 
-                    function phflashmin2(T)
+                    function phflashmin(T)
                         Q,β = Qh(model,ps,T,zs,hs)
                         return -Q
                     end
 
                     Ta = Ts + 2.0*ΔT[ih]
-                #    Qa,Npa = phflashmin(Ta)
-                    Tb = Ts
-                #    Qb,Npb = phflashmin(Tb)
                     Tc = Ts - 2.0*ΔT[ih]
-                #    Qc,Npc = phflashmin(Tc)
 
-                    bmres = brentmin(phflashmin2, Ta, Tc)
+                    Ta, Tc, Qa, Qc = bracketmin(phflashmin,Ta,Tc,5.0,false)
+
+                    bmres = brentmin(phflashmin, Ta, Tc, false)
 
                     holdups[ih].T = bmres[1]
                 #    println("Ts[$(ih)] = $(bmres[1]) K")
@@ -1060,15 +1184,58 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
         #
 
         # assume vapour removal
-        volume_new = (holdups[1].volume + holdups[2].volume)
-        Δv = volume_new - volume
+        tank_volume_new = (holdups[1].volume + holdups[2].volume)
+        Δv = tank_volume_new - tank_volume
         println("Δv = $(Δv)")
         holdups[1].volume -= Δv
+        Δmoles = holdups[1].volume/holdups[1].v - holdups[1].moles
+        Δmoles = holdups[1].moles - holdups[1].volume/holdups[1].v
         holdups[1].moles = holdups[1].volume/holdups[1].v
 
+        pout = 1.01325e5
+        Cd = 0.98
+        d1 = 2.0*25.4/1000.0
+        d2 = 8.0*25.4/1000.0
+        flowout, pcrit, Tcrit = orificeFlow(model,holdups[1].p,holdups[1].T,holdups[1].z,pout,d1,d2,Cd,false)
+
+        Δt = Δmoles/flowout
+        time += Δt
+        println("time = $(time/3600)")
+        push!(time_Plot, time/3600.0)
+
+        # new level
+        for ih = eachindex(holdups)
+            tank_xsa_holdups[ih] = holdups[ih].volume/tank_length
+        end
+
+        error = 1.0
+        while (error > 0.0001)
+            f =  (tank_radius^2)*(theta - sin(theta)) - 2.0*tank_xsa_holdups[2]
+            df_dtheta = (tank_radius^2)*(1.0 - cos(theta))
+            theta = theta - f/df_dtheta
+            error = abs(f)
+            println("theta = $(theta), error = $(error)")
+        end
+
+        level[2] = 1.0 - cos(theta/2.0)
+        level[1] = 1.0 - level[2]
+        println("level[2] = $(level[2])")
+
+        cord = 2.0*tank_radius*sin(theta/2.0)
+        interface_area = cord*tank_length
+        println("interface_area = $(interface_area)")
+
+        # used for position along wall as an arc length used to define position of interface
+        arc_length = pi*tank_radius
+        arc_length_liquid = theta/2.0*tank_radius
+        println("arc_length_liquid/arc_length = $(arc_length_liquid/arc_length)")
+
+        # need htc
+        htc = 100.0
+
         if holdups[1].moles > 0.0 && holdups[2].moles > 0.0
-            ΔQ[1] = 100*(holdups[2].T - holdups[1].T)/holdups[1].moles
-            ΔQ[2] = 100*(holdups[1].T - holdups[2].T)/holdups[2].moles
+            ΔQ[1] = Δt*htc*interface_area*(holdups[2].T - holdups[1].T)/holdups[1].moles
+            ΔQ[2] = Δt*htc*interface_area*(holdups[1].T - holdups[2].T)/holdups[2].moles
         else
             ΔQ[1] = 0.0
             ΔQ[2] = 0.0
@@ -1113,6 +1280,48 @@ function BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
 
     display(p2)
 
+    p3 = plot(
+    label=["vapour" "liquid"], 
+    [time_Plot,time_Plot],
+    [p1_Plot,p2_Plot],
+    xlabel = "Time [hours]",
+    ylabel = "Pressure [bara]",
+    left_margin = 10Plots.mm,
+    bottom_margin = 10Plots.mm,
+    xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+    grid = :on,linewidth=3,
+    size=(1600,1200))
+
+    display(p3)
+
+    p4 = plot(
+    label=["vapour" "liquid"], 
+    [time_Plot,time_Plot],
+    [T1_Plot,T2_Plot],
+    xlabel = "Time [hours]",
+    ylabel = "Temperaure [deg C]",
+    left_margin = 10Plots.mm,
+    bottom_margin = 10Plots.mm,
+    xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+    grid = :on,linewidth=3,
+    size=(1600,1200))
+
+    display(p4)
+
+    p5 = plot(
+    label=["vapour" "liquid"],
+    [time_Plot,time_Plot], 
+    [m1_Plot,m2_Plot],
+    xlabel = "Time [hours]",
+    ylabel = "Mass [tons]",
+    left_margin = 10Plots.mm,
+    bottom_margin = 10Plots.mm,
+    xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+    grid = :on,linewidth=3,
+    size=(1600,1200))
+
+    display(p5)
+
 end
 
 #pe = 8.0e5
@@ -1120,6 +1329,4 @@ end
 delta_P = 0.25e5
 pe = 10.0e5
 nstep = (ps - pe)/delta_P
-BlowDown(model, ps, Ts, zs, volume, level, pe, nstep)
-
-=#
+BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, level, pe, nstep)
