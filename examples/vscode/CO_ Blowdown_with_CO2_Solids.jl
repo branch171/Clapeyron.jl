@@ -696,7 +696,7 @@ function orificeFlowOld(model,pin,Tin,zin,pout,d0,d1)
 
 end
 
-function orificeFlow(model,pin,Tin,zin,pout,d0,d1,Cd,verbose)
+function orificeFlow(model,pin,Tin,zin,pcrit,Tcrit,pout,Tout,d0,d1,Cd,verbose)
 
     S0 = 3.14159/4*d0^2
     S1 = 3.14159/4*d1^2
@@ -706,7 +706,7 @@ function orificeFlow(model,pin,Tin,zin,pout,d0,d1,Cd,verbose)
 
     rhoin = 1.0/vtin
     Δp = (pin - pout)/50
-    Ts = Tin
+ #   Ts = Tin
 
     function flowcalc(pf)
         function Qs(model,p,T,x,sspec)
@@ -734,10 +734,12 @@ function orificeFlow(model,pin,Tin,zin,pout,d0,d1,Cd,verbose)
     end
 
     flow1 = 0.0
-    p2 = (pin + pout)/2.0
+    p2 = pcrit
+    Ts = Tcrit
     Q2 = flowcalc(p2)
     T2 = Ts
 #    println("T2 = $(T2 - 273.15) deg C")
+    Ts = Tout
     Q3 = flowcalc(pout)
     T3 = Ts
 #    println("T3 = $(T3 - 273.15) deg C")
@@ -762,12 +764,12 @@ function orificeFlow(model,pin,Tin,zin,pout,d0,d1,Cd,verbose)
             println("critical flow...")
             println("flow_critical = $(-bmres[2]) mol/s, pcritical = $(bmres[1]/1e5) bara")
         end
-        return -bmres[2],bmres[1],Ts
+        return -bmres[2],bmres[1],Ts,T3
     else
         if verbose
             println("flow = $(-Q3) mol/s")
         end
-        return -Q3, pout,T3
+        return -Q3,p2,T2,T3
     end
 
 end
@@ -776,15 +778,20 @@ pin = ps
 Tin = Ts
 zin = zs
 pout = 1.01325e5
+Tcrit = Tin
+Tout = Tin
+pcrit = (pin + pout)/2.0
 
 #orificeFlowOld(model,pin,Tin,zin,pout,2*25.4/1000.0,8.0*25.4/1000.0)
 
-flow,pf,Tf = orificeFlow(model,pin,Tin,zin,pout,2*25.4/1000.0,8.0*25.4/1000.0,0.98,true)
+flow,pcrit,Tcrit,Tout = orificeFlow(model,pin,Tin,zin,pcrit,Tcrit,pout,Tout,2*25.4/1000.0,8.0*25.4/1000.0,0.98,true)
 
 println("orifice flow = $(flow) mol/s")
-println("orifice critical pressure = $(pf/1e5) bara")
-println("orifice critical Temperature = $(Tf - 273.15) deg C")
-println("orifice critical ratio pf/pin = $(pf/pin)")
+println("orifice critical pressure = $(pcrit/1e5) bara")
+println("orifice critical Temperature = $(Tcrit - 273.15) deg C")
+println("orifice critical ratio pf/pin = $(pcrit/pin)")
+println("orifice critical pressure = $(pout/1e5) bara")
+println("orifice critical Temperature = $(Tout - 273.15) deg C")
 
 
 function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, level, pe, nstep)
@@ -903,13 +910,19 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
     level[1] = 1.0 - level[2]
     println("level[2] = $(level[2])")
 
+    # set RO critical and outlet temperatures
+
+    Tcrit = holdups[1].T
+    Tout = holdups[1].T
+    pout = 1.01325e5
+    pcrit = (ps + pout)/2.0
+
     println("")
     println("Blowndown Function Start:")
     println("Initialization:")
     println("")
     println("holdups = $(holdups)")
     
-
     Δp = (ps - pe)/nstep
     ΔT = fill(-0.33,length(holdups))
     ΔQ = zeros(length(holdups))
@@ -1192,12 +1205,21 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
         Δmoles = holdups[1].moles - holdups[1].volume/holdups[1].v
         holdups[1].moles = holdups[1].volume/holdups[1].v
 
-        pout = 1.01325e5
+    #    pout = 1.01325e5
         Cd = 0.98
         d1 = 2.0*25.4/1000.0
         d2 = 8.0*25.4/1000.0
-        flowout, pcrit, Tcrit = orificeFlow(model,holdups[1].p,holdups[1].T,holdups[1].z,pout,d1,d2,Cd,false)
+        flowout, pcrit, Tcrit, Tout = orificeFlow(model,holdups[1].p,holdups[1].T,holdups[1].z,pcrit,Tcrit,pout,Tout,d1,d2,Cd,false)
 
+    #    println("orifice flow = $(flowout) mol/s")
+    #    println("orifice critical pressure = $(pcrit/1e5) bara")
+    #    println("orifice isentropic critical Temperature = $(Tcrit - 273.15) deg C")
+    #    println("orifice critical ratio pf/pin = $(pcrit/pin)")
+    #    println("orifice outlet pressure = $(pout/1e5) bara")
+    #    println("orifice isentropic outlet Temperature = $(Tout - 273.15) deg C")
+
+        # to find actual valve outlet condition we need an isenthalpy flash from pin to pout.
+        
         Δt = Δmoles/flowout
         time += Δt
         println("time = $(time/3600)")
@@ -1223,19 +1245,33 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
 
         cord = 2.0*tank_radius*sin(theta/2.0)
         interface_area = cord*tank_length
-        println("interface_area = $(interface_area)")
+        println("interface_area = $(interface_area) m2")
 
         # used for position along wall as an arc length used to define position of interface
         arc_length = pi*tank_radius
         arc_length_liquid = theta/2.0*tank_radius
         println("arc_length_liquid/arc_length = $(arc_length_liquid/arc_length)")
 
-        # need htc
-        htc = 100.0
+        wall_vapour_area = (arc_length - arc_length_liquid)*tank_length
+        println("wall_vapour_area = $(wall_vapour_area) m2")
+
+        wall_liquid_area = arc_length_liquid*tank_length
+        println("wall_liquid_area = $(wall_liquid_area) m2")
+
+        # need htc for vapour wall and liquid wall based on transport properties, Re, Pr, Gr etc
+        htc_vap = 1000.0
+        htc_liq_convective = 5000.0
+        htc_boil = 20000.0
+        htc_liq = sqrt(htc_boil^2 + htc_liq_convective^2)
+        
+        # then we use Ferrite to model finite element wall and do a transient step for the Δt
+
+        # htc for interface ~ 1/alpha = 1/alpha_vap + 1/alpha_liq, alpha_liq is not boiling part is just convective
+        htc_vap_liq = 1.0/(1.0/htc_vap + 1.0/htc_liq_convective)
 
         if holdups[1].moles > 0.0 && holdups[2].moles > 0.0
-            ΔQ[1] = Δt*htc*interface_area*(holdups[2].T - holdups[1].T)/holdups[1].moles
-            ΔQ[2] = Δt*htc*interface_area*(holdups[1].T - holdups[2].T)/holdups[2].moles
+            ΔQ[1] = Δt*htc_vap_liq*interface_area*(holdups[2].T - holdups[1].T)/holdups[1].moles
+            ΔQ[2] = Δt*htc_vap_liq*interface_area*(holdups[1].T - holdups[2].T)/holdups[2].moles
         else
             ΔQ[1] = 0.0
             ΔQ[2] = 0.0
