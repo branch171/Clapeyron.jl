@@ -443,7 +443,8 @@ zs = [zCO2,1.0-zCO2]
 
 tank_volume = 5500/9
 
-tank_radius = 5.3/2
+tank_diamter = 5.3
+tank_radius = tank_diamter/2.0
 tank_xsarea = pi*tank_radius^2
 tank_length = tank_volume/tank_xsarea
 
@@ -895,7 +896,8 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
         end
     end
 
-    # level
+    # tank liquid level based on volume percentage height based on tank diamter
+    height = zeros(length(holdups))
     theta = 80/180*pi
     error = 1.0
     while (error > 0.0001)
@@ -906,9 +908,12 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
         println("theta = $(theta), error = $(error)")
     end
 
-    level[2] = 1.0 - cos(theta/2.0)
-    level[1] = 1.0 - level[2]
-    println("level[2] = $(level[2])")
+    # height based on tank diamter
+    tank_diameter = 2.0*tank_radius
+    levelPercent = (1.0 - cos(theta/2.0))/2.0*100.0
+    height[2] = tank_diameter*levelPercent/100.0
+    height[1] = tank_diameter*(1.0 - levelPercent/100.0)
+    println("Level Percent = $(levelPercent)")
 
     # set RO critical and outlet temperatures
 
@@ -1239,9 +1244,16 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
             println("theta = $(theta), error = $(error)")
         end
 
-        level[2] = 1.0 - cos(theta/2.0)
-        level[1] = 1.0 - level[2]
-        println("level[2] = $(level[2])")
+    #    level[2] = (1.0 - cos(theta/2.0))/2.0
+    #    level[1] = 1.0 - level[2]
+    #    println("level[2] = $(level[2])")
+
+        # height based on tank diamter
+        tank_diameter = 2.0*tank_radius
+        levelPercent = (1.0 - cos(theta/2.0))/2.0*100.0
+        height[2] = tank_diameter*levelPercent/100.0
+        height[1] = tank_diameter*(1.0 - levelPercent/100.0)
+        println("Level Percent = $(levelPercent)")
 
         cord = 2.0*tank_radius*sin(theta/2.0)
         interface_area = cord*tank_length
@@ -1252,10 +1264,12 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
         arc_length_liquid = theta/2.0*tank_radius
         println("arc_length_liquid/arc_length = $(arc_length_liquid/arc_length)")
 
-        wall_vapour_area = (arc_length - arc_length_liquid)*tank_length
+        # all areas are based on total area for calculating heat from fluids. Only 50% goes to wall as this is 
+        # modelled symmetrically
+        wall_vapour_area = 2.0*(arc_length - arc_length_liquid)*tank_length
         println("wall_vapour_area = $(wall_vapour_area) m2")
 
-        wall_liquid_area = arc_length_liquid*tank_length
+        wall_liquid_area = 2.0*arc_length_liquid*tank_length
         println("wall_liquid_area = $(wall_liquid_area) m2")
 
         # need htc for vapour wall and liquid wall based on transport properties, Re, Pr, Gr etc
