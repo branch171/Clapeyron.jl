@@ -717,6 +717,7 @@ function HELD_impl(model,p,T,z₀,
         # return unique solutions, these need to be added to M and are good initial guesses for phases
         if verbose == true
             println("HELD Step 1 - Fluid is unstable, search for phases begins")
+			println("HELD Step 1 - xmins unique = $(xmins_unique)")
             println("HELD Step 1 - Initialise set ℳ used for OPₓᵥ , and ℳguess used for local minimisations in IPₓᵥ")
     	end
     	
