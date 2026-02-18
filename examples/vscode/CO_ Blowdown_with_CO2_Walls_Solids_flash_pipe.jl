@@ -1341,10 +1341,10 @@ println("cp_ambient = $(cp_ambient)")
 zCO2 = 0.997275
 zs = [zCO2,1.0-zCO2]
 
-tank_diamter = 5.2 #m
+tank_diamter = 0.1937 #m
 tank_radius = tank_diamter/2.0
 tank_xsarea = pi*tank_radius^2
-tank_length_TT = 26.882 #m
+tank_length_TT = 76.80/4 #m
 # spherical ends
 tank_volume = tank_xsarea*tank_length_TT + 4/3*pi*tank_radius^3
 tank_length = tank_volume/tank_xsarea
@@ -1353,7 +1353,7 @@ println("tank volume = $(tank_volume)")
 println("tank length = $(tank_length)")
 
 level = zeros(2)
-level[1] = 0.95
+level[1] = 0.05
 #level[1] = 1.0 - 0.041/611.11
 level[2] = 1.0 - level[1]
 
@@ -1814,7 +1814,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
     Twall_noz = Twall_initial - 273.15
     Twall_outer = Twall_initial - 273.15
     #T_ambient = holdups[1].T - 273.15
-    wall_thickness = 0.043
+    wall_thickness = 0.013
     insulation_thickness = 0.015
     overall_thickness = wall_thickness + insulation_thickness
 
@@ -1869,7 +1869,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
 
         return grid
     end
-    nradius = 58
+    nradius = 28
     h = overall_thickness/nradius # approximate element size
     println("approximate element size h = $(h)")
     grid = setup_grid(h)
@@ -2081,7 +2081,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
     uₙ = zeros(ndofs(dh));
     fill!(uₙ, Twall_initial - 273.15)
 
-    wtite_VTK = true
+    wtite_VTK = false
     # To store the solution, we initialize a paraview collection (.pvd) file,
     if wtite_VTK
         pvd = paraview_collection("transient-heat")
@@ -2094,8 +2094,8 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
     # FEM wall finished
 
     # assume vapour removal
-#    topflow = true
-    topflow = false
+    topflow = true
+#    topflow = false
 
     level_min = 0.01
     alpha_lag = 0.5
@@ -2104,8 +2104,8 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
     
     Cdliq = 0.67
     Cdvap = 0.98
-    d1 = 2.0*25.4/1000.0/sqrt(2)
-#    d1 = 10/1000.0
+#    d1 = 2.0*25.4/1000.0/sqrt(2)
+    d1 = 5/1000.0
     d2 = 8.0*25.4/1000.0
     number_tanks_parallel = 1
     println("number of tanks parallel = $(number_tanks_parallel)")
@@ -2142,6 +2142,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
         volume_solid = 0.0
         hm_solid = 0.0
 
+        #=    
             if ps >= 4.75e5 && ps <= 5.5e5
                if Δt > Δtmax/5
                     Δp = Δp*Δtmax/5/Δt
@@ -2155,12 +2156,13 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
                     Δp = 0.5*Δpbase + 0.5*Δp
                 end
             end
+        =#
 
         for ih = eachindex(holdups)
 
             println("")
             println("Δp = $(Δp)")
-            
+
             ps = holdups[ih].p - Δp
         #    println("holdup[$(ih)]")
 
@@ -3466,7 +3468,7 @@ end
 
 delta_P = 0.125e5
 pe = 1.0e5
-Δtmax = 240.0
+Δtmax = 5.0
 nstep = Int((ps - pe)/delta_P)
 println("nstep = $(nstep)")
 nVTK = 2
