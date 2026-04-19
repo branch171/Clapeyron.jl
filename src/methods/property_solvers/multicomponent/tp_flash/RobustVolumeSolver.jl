@@ -1,11 +1,20 @@
 function RVS_getvref(model,z₀)
-	pure = split_pure_model(model)
-    crit = crit_pure.(pure)
+#	 pure = split_pure_model(model)
+#    crit = crit_pure.(pure)
+	model_params = Clapeyron.getparams(model.components, ["properties/critical.csv"]; userlocations = String[], verbose = false)
+	vc = model_params["Vc"].values
 	nc = length(z₀)
     vref = 0.0
-    for i= 1:nc
-    	Tc,pc,vc = crit[i]
-    	vref += z₀[i]*vc
+#	for i = 1:nc
+#		Tc,pc,vc = crit[i]
+#		if vc > vref
+#			vref = vc
+#		end
+#    end
+    for i = 1:nc
+#    	Tc,pc,vc = crit[i]
+#    	vref += z₀[i]*vc
+		vref += z₀[i]*vc[i]
     end
 	return vref
 end

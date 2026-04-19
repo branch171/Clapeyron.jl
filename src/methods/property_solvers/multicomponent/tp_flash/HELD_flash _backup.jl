@@ -858,9 +858,20 @@ function HELD_impl(model,p,T,z₀,
     μ₀ = VT_chemical_potential(model,v₀,T,z₀)
     λ₀ = (μ₀[1:nc-1] .- μ₀[nc])/R̄/T
  
+#	ρ₀ = RVS_density(model,p,T,z₀,vref)
     G(x) = HELD_func(model,p,T,z₀,vref,x,λ₀)
     G_g(x) = Solvers.gradient(G,x)
     G_h(x) = Solvers.hessian(G,x)
+
+	#=
+    lb = zeros(nc)
+    ub = ones(nc)
+    for i=1:nc
+        lb[i] += eps(Float64)*100.0
+        ub[i] -= eps(Float64)*100.0
+    end
+    ub[nc] = 15.0
+	=#
 
 	lb = eps(Float64)*1e2
 	ub = 1.0 - lb
@@ -870,7 +881,6 @@ function HELD_impl(model,p,T,z₀,
 	cnstHELD(x,s) = HELDConstraints(x,lb,ub,lbrho,ubrho,s)
  	x₀ = append!(deepcopy(z₀[1:nc-1]),ρ₀)
     G₀ = G(x₀)
-
     if verbose == true
     		println("HELD Step 1 - Initialisation:")
     		println("HELD Step 1 - UBDⱽ = $(G₀)")
@@ -878,26 +888,86 @@ function HELD_impl(model,p,T,z₀,
     end
     xi = HELD_initial_compositions(model,p,T,z₀,add_pure_guess,add_anti_pure_guess,add_pure_component,add_random_guess,add_all_guess)
     
+	useTrustRegion = true
 	fmins = Vector{Float64}(undef,0)
     xmins = Vector{Vector{Float64}}(undef,0)
-	
-	for ix = 1:length(xi)
-		ρi = RVS_density(model,p,T,xi[ix],vref)
-		xρi = append!(deepcopy(xi[ix][1:nc-1]),ρi)
-		xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(G, G_g, G_h, projHELD,cnstHELD, xρi, max_trust_region_iters, tol, false)
-
-		xmin = projHELD(xmin)
-		fmin = G(xmin)
-		
-		# we add fmin < G₀ as we are searching for instability
-		if fmin < G₀ && check == false
-			push!(fmins,fmin)
-			push!(xmins,xmin)
+	if !useTrustRegion
+		# successive substitution Michelsen Method
+		W = zeros(length(z₀))
+		W_last = zeros(length(z₀))
+		W_error = zeros(length(z₀))
+		dzi = zeros(length(z₀))
+		phi_zi = Clapeyron.VT_fugacity_coefficient(model,v₀,T,z₀)
+		for iz = eachindex(z₀)
+			dzi[iz] = log(phi_zi[iz]*z₀[iz])
 		end
+		for ix = 1:length(xi)
+			iter = 0
+			error = 1
+			ρi = 0.0
+			while error > tol && iter < 1000
+				iter += 1
+				ρi = RVS_density(model,p,T,xi[ix],vref)
+				vi = vref/ρi
+				phi_xi = Clapeyron.VT_fugacity_coefficient(model,vi,T,xi[ix])
+				for ixi = eachindex(xi[ix])
+					W[ixi] = exp(dzi[ixi] - log(phi_xi[ixi]))
+				end
+				sumW = sum(W)
+				for ixi = eachindex(xi[ix])
+					xi[ix][ixi] = W[ixi]/sumW
+				end
+				for ixi = eachindex(W)
+					W_error[ixi] = W[ixi] - W_last[ixi]
+				end
+				for ixi = eachindex(W)
+					W_last[ixi] = W[ixi]
+				end
+				error = norm(W_error,2)
+			end
+			xmin = append!(deepcopy(xi[ix][1:nc-1]),ρi)
+			xmin = projHELD(xmin)
+			fmin = G(xmin)
+			if fmin < G₀ 
+				push!(fmins,fmin)
+				push!(xmins,xmin)
+			end
+		end
+	else
+		for ix = 1:length(xi)
+			ρi = RVS_density(model,p,T,xi[ix],vref)
+			xρi = append!(deepcopy(xi[ix][1:nc-1]),ρi)
+			xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(G, G_g, G_h, projHELD,cnstHELD, xρi, max_trust_region_iters, tol, false)
 
+			xmin = projHELD(xmin)
+			fmin = G(xmin)
+			
+			# we add fmin < G₀ as we are searching for instability
+		#	if fmin < G₀ && check == false
+			if check == false
+				push!(fmins,fmin)
+				push!(xmins,xmin)
+			end
+		end
 	end
     
     fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol_clean, verbose)
+
+	#=
+	# with the unique solution ensure the rho solution is correct based on rho solver this needs a fmin update
+	xu = zeros(nc)
+	for iu = 1:length(xmins_unique)
+		sumx = 0.0
+		for ix = 1:nc-1
+			xu[ix] = xmins_unique[iu][ix]
+			sumx += xu[ix]
+		end
+		xu[nc] = 1.0 - sumx
+		ρu = RVS_density(model,p,T,xu,vref)
+		xmins_unique[iu][nc] = ρu
+		fmins_unique[iu] = G(xmins_unique[iu])
+	end
+	=#
 
     if verbose == true
     		println("HELD Step 1 - Phase stability check completed: $(length(fmins_unique)) unique solutions found")
@@ -1101,11 +1171,18 @@ function HELD_impl(model,p,T,z₀,
 					println("HELD Step 3 - λ bounds added to OPₓᵥ")
 				end
 			end
-
-			λnorm = norm(λˢ,Inf)
-			if limit_λs_by_bounds
-				λmax  = filter*1.05*λnorm + (1.0 - filter)*λmax
-			end
+		#	if k < nstep
+		#		λˢ = filter*λˢ + (1.0 - filter)*λ₀
+		#		λnorm = norm(λˢ,Inf)
+		#		if limit_λs_by_bounds
+		#			λmax  = filter*1.05*λnorm + (1.0 - filter)*λmax
+		#		end
+		#	else
+				λnorm = norm(λˢ,Inf)
+				if limit_λs_by_bounds
+					λmax  = filter*1.05*λnorm + (1.0 - filter)*λmax
+				end
+		#	end
 
 			if verbose == true
     			println("HELD Step 2 - Update UBDⱽ and λˢ from OPₓᵥ: UBDⱽ = $(UBDⱽ)")
@@ -1129,18 +1206,25 @@ function HELD_impl(model,p,T,z₀,
     	    if verbose == true
         		println("HELD Step 3 - IPₓᵥ solve, generate cutting plane with λˢ")
     		end
-
-			Gˢ(x) = HELD_func(model,p,T,z₀,vref,x,λˢ)
-			Gˢ_g(x) = Solvers.gradient(Gˢ, x)
+    		Gˢ(x) = HELD_func(model,p,T,z₀,vref,x,λˢ)
+    		Gˢ_g(x) = Solvers.gradient(Gˢ, x)
     		Gˢ_h(x) = Solvers.hessian(Gˢ, x)
     		
     		fmins = Vector{Float64}(undef,0)
     		xmins = Vector{Vector{Float64}}(undef,0)
     			
     		for ix = 1:length(ℳguess)
-
     			xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gˢ, Gˢ_g, Gˢ_h, projHELD, cnstHELD, ℳguess[ix][1:nc], max_trust_region_iters, tol, false)
+
+			#	xmin = projHELD(xmin)
+			#	fmin = Gˢ(xmin)
     			
+   			#	if verbose == true
+        	#		println("HELD Step 3 - IPₓᵥ solve, fmin = $(fmin) error = $(error) iter = $(iter)")
+			#		println("HELD Step 3 - IPₓᵥ solve, xmin = $(xmin)")
+ 	  		#	end
+			
+			#	if fmin < G₀ && check == false
 				if fmin < UBDⱽ && check == false
 					push!(fmins,fmin)
 					push!(xmins,xmin)
@@ -1158,10 +1242,28 @@ function HELD_impl(model,p,T,z₀,
 			
 			if verbose == true
         		println("HELD Step 3 - IPₓᵥ solve unique, $(length(fmins_unique)) unique solutions found")
+			#	println("HELD Step 3 - IPₓᵥ solve unique, fmin = $(fmins_unique)")
+			#	println("HELD Step 3 - IPₓᵥ solve unique, xmin = $(xmins_unique)")
     		end
     		
     		ℒ = Vector{Vector{Float64}}(undef,0)
     		if length(fmins_unique) > 0
+	
+				#=
+				# with the unique solution ensure the rho solution is correct based on rho solver this needs a fmin update
+				xu = zeros(nc)
+				for iu = 1:length(xmins_unique)
+					sumx = 0.0
+					for ix = 1:nc-1
+						xu[ix] = xmins_unique[iu][ix]
+						sumx += xu[ix]
+					end
+					xu[nc] = 1.0 - sumx
+					ρu = RVS_density(model,p,T,xu,vref)
+					xmins_unique[iu][nc] = ρu
+					fmins_unique[iu] = Gˢ(xmins_unique[iu])
+				end
+				=#
 				
 				# find lowest minimum of returned set.
 				LBDⱽ = fmins_unique[1]
@@ -1191,11 +1293,11 @@ function HELD_impl(model,p,T,z₀,
     			if verbose == true
         			println("HELD Step 3 - IPₓᵥ Global solution required")
   				end
-				iter_rand_max = 3*nc
+				iter_rand_max = nc
 				for iter_rand = 1:iter_rand_max
-					xr = fill(0.0,nc)
+					xr = fill(0.,nc)
     				for i = 1:nc
-    						xr[i] = 1.0e-9 + (1.0 - 2e-9)*rand()
+    						xr[i] = 1.0e-6 + (1.0 - 2e-6)*rand()
     				end
     				sumxr = sum(xr)
     				xr ./= sumxr
@@ -1207,10 +1309,15 @@ function HELD_impl(model,p,T,z₀,
 					xρGr = append!(deepcopy(xρr),Gi(xρr))
     				xmin,fmin,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gˢ, Gˢ_g, Gˢ_h, projHELD, cnstHELD,  xρGr[1:nc], max_trust_region_iters, tol, false)
 
-					xmin = projHELD(xmin)
-					fmin = Gˢ(xmin)
+				#	xmin = projHELD(xmin)
+				#	fmin = Gˢ(xmin)
+    				
+#    				if verbose == true
+#        				println("HELD Step 3 - IPₓᵥ solve, fmin = $(fmin) error = $(error) iter = $(iter)")
+#    				end
 
-					if fmin < UBDⱽ && check == false
+					if fmin < G₀ && check == false
+				#	if fmin < (UBDⱽ + max(tol*0.1, eps(Float64))) && check == false
     					push!(fmins,fmin)
     					push!(xmins,xmin)
     				end
@@ -1219,6 +1326,22 @@ function HELD_impl(model,p,T,z₀,
 				fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol_clean, verbose)
 
 				if length(fmins_unique) > 0
+
+					#=
+					# with the unique solution ensure the rho solution is correct based on rho solver this needs a fmin update
+					xu = zeros(nc)
+					for iu = 1:length(xmins_unique)
+						sumx = 0.0
+						for ix = 1:nc-1
+							xu[ix] = xmins_unique[iu][ix]
+							sumx += xu[ix]
+						end
+						xu[nc] = 1.0 - sumx
+						ρu = RVS_density(model,p,T,xu,vref)
+						xmins_unique[iu][nc] = ρu
+						fmins_unique[iu] = Gˢ(xmins_unique[iu])
+					end
+					=#
 					
 					# find lowest minimum of returned set.
 					LBDⱽ = fmins_unique[1]
@@ -1402,6 +1525,28 @@ function HELD_impl(model,p,T,z₀,
 					println("HELD Step 4 - xmins_unique: $(xmins_unique)")
 				end
 
+				#=
+				# with the unique solution ensure the rho solution is correct based on rho solver
+				xu = zeros(nc)
+				for iu = 1:np
+					sumx = 0.0
+					for ix = 1:nc-1
+						xu[ix] = xmins_unique[iu][ix]
+						sumx += xu[ix]
+					end
+					xu[nc] = 1.0 - sumx
+					ρu = RVS_density(model,p,T,xu,vref)
+					xmins_unique[iu][nc] = ρu
+				end
+				=#
+				
+			#	single_phase = false
+			#	for ip = 1:np-1
+			#		if beta[ip] > 1.0 - 1000.0*eps(Float64)
+			#			single_phase = true
+			#		end
+			#	end
+
 	   			for ip = 1:np-1
     				push!(xHELD,beta[ip])
     				for ic = 1:nc
@@ -1411,8 +1556,11 @@ function HELD_impl(model,p,T,z₀,
     			push!(xHELD,xmins_unique[np][nc])
 
     			HELD_complete = true
-				break
+			#	if single_phase
+			#		HELD_complete = false
+			#	end
 
+				break
 			end
     		
     		if verbose == true
@@ -1721,7 +1869,6 @@ function HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol_clean, verbose
     	end
     end
     # remove trival solutions
-	#=
     for imins = 1:length(fmins)
     	if iminfound[imins]
     		distances = xmins[imins] .- x₀
@@ -1732,7 +1879,6 @@ function HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol_clean, verbose
     		end
     	end
     end
-	=#
 #	if verbose
 #		println("HELD_clean_local_solutions iminfound: $(iminfound)")
 #	end
@@ -1743,11 +1889,9 @@ function HELD_clean_local_solutions(G₀, x₀, fmins, xmins, tol_clean, verbose
     	if iminfound[ir]
     		if fmins[ir] < G₀
     			stable = false
-				push!(fmins_unique,fmins[ir])
-    			push!(xmins_unique,xmins[ir])
     		end 
-    	#	push!(fmins_unique,fmins[ir])
-    	#	push!(xmins_unique,xmins[ir])
+    		push!(fmins_unique,fmins[ir])
+    		push!(xmins_unique,xmins[ir])
     	end
     end
 #	if verbose

@@ -732,7 +732,7 @@ function brentmin(
     verbose::Bool,
     rel_tol::T = sqrt(eps(T)),
     abs_tol::T = eps(T),
-    iterations::Integer = 1_000,
+    iterations::Integer = 1000,
 ) where {T<:AbstractFloat}
 
     if x_lower > x_upper
@@ -935,7 +935,7 @@ function cp_dryice(p,T,Tref,href,sref,gint,sint,fach,facs)
     g(x) = gibbs_dryice(p,x,Tref,href,sref,gint,sint,fach,facs)
     dg(x) = Clapeyron.Solvers.derivative(g,x)
     ddg(x) = Clapeyron.Solvers.derivative(dg,x)
-    return -T*T*ddg(T)
+    return -T*ddg(T)
 end
 
 # we set the g0 and g1 values to match fluid triple point reference conditions
@@ -1899,7 +1899,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
 
             moles_total = holdups[3].moles
 
-            if βsolid < 1.0
+        #    if βsolid < 1.0
 
                 moles_vapour = max((1.0 - βsolid)*moles_total,0.0)
                 phases = Vector{phase}(undef,0)
@@ -1914,17 +1914,17 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
                 holdups[3].h = (1.0 - βsolid)*hv + βsolid*hs
                 holdups[3].s = (1.0 - βsolid)*sv + βsolid*ss
 
-            else
+        #    else
 
-                moles_solid = max(moles_total,0.0)
-                phase_solid = phase(1.0,moles_solid*vs,moles_solid,mwCO2,vs,hs,ss,[1.0,0.0])
-                holdups[3].phase_solid = phase_solid
+        #        moles_solid = max(moles_total,0.0)
+        #        phase_solid = phase(1.0,moles_solid*vs,moles_solid,mwCO2,vs,hs,ss,[1.0,0.0])
+        #        holdups[3].phase_solid = phase_solid
 
-                holdups[3].volume = moles_solid*vs
-                holdups[3].h = hs
-                holdups[3].s = ss
+        #        holdups[3].volume = moles_solid*vs
+        #        holdups[3].h = hs
+        #        holdups[3].s = ss
 
-            end
+        #    end
 
         end
 
@@ -1992,7 +1992,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
     println("")
     
     Δpbase = (ps - pe)/nstep
-    ΔT = fill(-0.33,length(holdups))
+    ΔT = fill(-0.16,length(holdups))
     ΔQ = zeros(length(holdups))
 
     time_Plot = Vector{Float64}(undef,0)
@@ -2440,6 +2440,11 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
             holdups[ih].p = ps
         end
 
+    #    for ih = 1:2
+    #        holdups[ih].T += ΔT[ih]
+    #        holdups_last[ih].T += ΔT[ih]
+    #    end
+
         tiny_holdup = 1.0e-6
 
         while(Δv_error > 1.0e-3 || iter <= 2)
@@ -2506,7 +2511,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
             # here we add in mh from flow into a phase from outside the vessel, like N2
 
             for ih = eachindex(holdups)
-                holdups_mh[ih] += Δmh[ih] + ΔQ[ih] - holdups[ih].volume*Δp
+                holdups_mh[ih] += Δmh[ih] + ΔQ[ih] - holdups_last[ih].volume*Δp
             end
 
             holdups_cm = Vector{Vector{Float64}}(undef,0)
@@ -2548,9 +2553,9 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
                 end
             end
 
-        #    println("in holdups[$(1)] = $(holdups[1])")
-        #    println("in holdups[$(2)] = $(holdups[2])")
-        #    println("in holdups[$(3)] = $(holdups[3])")
+        #    println("flash in1 holdups[$(1)] = $(holdups[1])")
+        #    println("flash in1 holdups[$(2)] = $(holdups[2])")
+        #    println("flash in1 holdups[$(3)] = $(holdups[3])")
 
             # zero the moles and enathalpy transfers between phases
             Δcm = Vector{Vector{Float64}}(undef,0)
@@ -2567,16 +2572,13 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
 
             # ph flash fluid phases
             phFlashFluids!(holdups,ΔT,tiny_holdup,false)
-            for ih = eachindex(holdups)
-                ΔT[ih] = holdups[ih].T - holdups_last[ih].T
-            end
 
             # phflash solids
             phFlashSolid!(holdups,tiny_holdup, false)
 
-        #    println("flash in holdups[$(1)] = $(holdups[1])")
-        #    println("flash in holdups[$(2)] = $(holdups[2])")
-        #    println("flash in holdups[$(3)] = $(holdups[3])")
+        #    println("flash out1 holdups[$(1)] = $(holdups[1])")
+        #    println("flash out1 holdups[$(2)] = $(holdups[2])")
+        #    println("flash out1 holdups[$(3)] = $(holdups[3])")
 
             # perform phase separation based on current holdups
 
@@ -2690,8 +2692,8 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
                 Δmh[3] -= β1*mt3*h1
             end
 
-            println("Δcm = $(Δcm)")
-            println("Δmh = $(Δmh)")
+        #    println("Δcm = $(Δcm)")
+        #    println("Δmh = $(Δmh)")
 
             # we should have liquid formed for condensation
             # condensation also requires a cold wall Tvap - Tw > 0.0
@@ -2754,6 +2756,10 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
                 end
             end
 
+        #    println("flash in2 holdups[$(1)] = $(holdups[1])")
+        #    println("flash in2 holdups[$(2)] = $(holdups[2])")
+        #    println("flash in2 holdups[$(3)] = $(holdups[3])")
+
             # flash after separation and mixing to get consistent holdups. Note this may results in some phases appearing
             # we don't separate further, pragmatically we leave for next step
 
@@ -2766,9 +2772,9 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
             # phflash solids
             phFlashSolid!(holdups,tiny_holdup,false)
 
-        #    println("flash out holdups[$(1)] = $(holdups[1])")
-        #    println("flash out holdups[$(2)] = $(holdups[2])")
-        #    println("flash out holdups[$(3)] = $(holdups[3])")
+        #    println("flash out2 holdups[$(1)] = $(holdups[1])")
+        #    println("flash out2 holdups[$(2)] = $(holdups[2])")
+        #    println("flash out2 holdups[$(3)] = $(holdups[3])")
 
             tank_volume_new = holdups[1].volume + holdups[2].volume +  holdups[3].volume
 
@@ -2776,550 +2782,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
 
             println("Δv = $(Δv)")
 
-            pcrit_vap = pcrit_ratio_vap*holdups[1].p
-            flowout_vap, pcrit_vap, Tcrit_vap, Tout_vap = orificeFlow(model,holdups[1].p,holdups[1].T,holdups[1].z,pcrit_vap,Tcrit_vap,pout_vap,Tout_vap,d1,d2,Cdliq,Cdvap,false)
-            
-            pcrit_liq = pcrit_ratio_liq*holdups[2].p
-            flowout_liq, pcrit_liq, Tcrit_liq, Tout_liq = orificeFlow(model,holdups[2].p,holdups[2].T,holdups[2].z,pcrit_liq,Tcrit_liq,pout_liq,Tout_liq,d1,d2,Cdliq,Cdvap,false)
-
-            flowout_vap /= number_tanks_parallel
-            flowout_liq /= number_tanks_parallel
-            
-            pcrit_ratio_vap = pcrit_vap/holdups[1].p
-            pcrit_ratio_liq = pcrit_liq/holdups[2].p
-
-        #    println("pcrit_ratio vap = $(pcrit_ratio_vap)")
-        #    println("pcrit_ratio liq = $(pcrit_ratio_liq)")
-
-        #    println("flowout vapour = $(flowout_vap*holdups[1].mw) kg/s")
-        #    println("flowout liquid = $(flowout_liq*holdups[2].mw) kg/s")
-            
-        #    println("flowout vapour = $(flowout_vap*holdups[1].v) m3/s")
-        #    println("flowout liquid = $(flowout_liq*holdups[2].v) m3/s")
-
-        #=
-            if topflow
-                level_noz = levelPercent/100.0
-                volume_fraction_noz = alpha_lag*max(min((1.0 - level_noz)/level_min,1.0),0.0) + (1.0 - alpha_lag)*volume_fraction_noz
-           #     println("volume_fraction_noz = $(volume_fraction_noz)")
-                Δvolume[1] = min(Δv,holdups[1].volume*volume_fraction_noz)
-                Δvolume[2] = Δv - Δvolume[1]
-            #    Δt_liq = Δvolume[2]/(flowout_liq*holdups[2].v)
-            #    Δt_vap = Δvolume[1]/(flowout_vap*holdups[1].v)
-                if (holdups[2].volume - Δvolume[2])/holdups[2].v > holdups[2].moles
-                    Δmoles[2] = holdups[2].moles
-                    Δvolume[2] = holdups[2].volume
-                    Δvolume[1] = Δv - Δvolume[2]
-                else
-                    Δmoles[2] = holdups[2].moles - (holdups[2].volume - Δvolume[2])/holdups[2].v
-                end
-                if (holdups[1].volume - Δvolume[1])/holdups[1].v > holdups[1].moles
-                    Δmoles[1] = holdups[1].moles
-                    Δvolume[1] = holdups[1].volume
-                    Δvolume[2] = Δv - Δvolume[1]
-                else
-                    Δmoles[1] = holdups[1].moles - (holdups[1].volume - Δvolume[1])/holdups[1].v
-                end
-                Δt_liq = max(Δvolume[2]/(flowout_liq*holdups[2].v),0.0)
-                Δt_vap = max(Δvolume[1]/(flowout_vap*holdups[1].v),0.0)
-            else
-                level_noz = (levelPercent - solidPercent)/100.0
-                volume_fraction_noz = alpha_lag*max(min(level_noz/level_min,1.0),0.0) + (1.0 - alpha_lag)*volume_fraction_noz
-            #    println("volume_fraction_noz = $(volume_fraction_noz)")
-                Δvolume[2] = min(Δv,holdups[2].volume*volume_fraction_noz)
-                Δvolume[1] = Δv - Δvolume[2]
-            #    Δt_liq = Δvolume[2]/(flowout_liq*holdups[2].v)
-            #    Δt_vap = Δvolume[1]/(flowout_vap*holdups[1].v)
-                if (holdups[2].volume - Δvolume[2])/holdups[2].v > holdups[2].moles
-                    Δmoles[2] = holdups[2].moles
-                    Δvolume[2] = holdups[2].volume
-                    Δvolume[1] = Δv - Δvolume[2]
-                else
-                    Δmoles[2] = holdups[2].moles - (holdups[2].volume - Δvolume[2])/holdups[2].v
-                end
-                if (holdups[1].volume - Δvolume[1])/holdups[1].v > holdups[1].moles
-                    Δmoles[1] = holdups[1].moles
-                    Δvolume[1] = holdups[1].volume
-                    Δvolume[2] = Δv - Δvolume[1]
-                else
-                    Δmoles[1] = holdups[1].moles - (holdups[1].volume - Δvolume[1])/holdups[1].v
-                end
-                Δt_liq = max(Δvolume[2]/(flowout_liq*holdups[2].v),0.0)
-                Δt_vap = max(Δvolume[1]/(flowout_vap*holdups[1].v),0.0)
-            end
-
-            =#
-
-            if topflow
-                level_noz = levelPercent/100.0
-                volume_fraction_noz = alpha_lag*max(min((1.0 - level_noz)/level_min,1.0),0.0) + (1.0 - alpha_lag)*volume_fraction_noz
-                println("volume_fraction_noz = $(volume_fraction_noz)")
-                Δvolume[1] = min(Δv,holdups[1].volume*volume_fraction_noz)
-                Δvolume[2] = Δv - Δv_vap
-                Δt_liq = Δvolume[2]/(flowout_liq*holdups[2].v)
-                Δt_vap = Δvolume[1]/(flowout_vap*holdups[1].v)
-                holdups[2].volume -= Δvolume[2]
-                Δmoles[2] = max(holdups[2].moles - holdups[2].volume/holdups[2].v,0.0)
-                holdups[2].moles -= Δmoles[2]
-                holdups[1].volume -= Δvolume[1]
-                Δmoles[1] = max(holdups[1].moles - holdups[1].volume/holdups[1].v,0.0)
-                holdups[1].moles -= Δmoles[1]
-            else
-                level_noz = (levelPercent - solidPercent)/100.0
-                volume_fraction_noz = alpha_lag*max(min(level_noz/level_min,1.0),0.0) + (1.0 - alpha_lag)*volume_fraction_noz
-                println("volume_fraction_noz = $(volume_fraction_noz)")
-                Δvolume[2] = min(Δv,holdups[2].volume*volume_fraction_noz)
-                Δvolume[1] = Δv - Δvolume[2]
-                Δt_liq = Δvolume[2]/(flowout_liq*holdups[2].v)
-                Δt_vap = Δvolume[1]/(flowout_vap*holdups[1].v)
-                holdups[2].volume -= Δvolume[2]
-                Δmoles[2] = max(holdups[2].moles - holdups[2].volume/holdups[2].v,0.0)
-                holdups[2].moles -= Δmoles[2]
-                holdups[1].volume -= Δvolume[1]
-                Δmoles[1] = max(holdups[1].moles - holdups[1].volume/holdups[1].v,0.0)
-                holdups[1].moles -= Δmoles[1]
-            end
-
-            # update moles and volume
-            for ih = 1:2
-                for ip = eachindex(holdups[ih].phases)
-                    holdups[ih].phases[ip].moles  = holdups[ih].phases[ip].β*holdups[ih].moles
-                    holdups[ih].phases[ip].volume = holdups[ih].phases[ip].moles*holdups[ih].phases[ip].v
-                end
-                holdups[ih].phase_solid.moles  = holdups[ih].phase_solid.β*holdups[ih].moles
-                holdups[ih].phase_solid.volume = holdups[ih].phase_solid.moles*holdups[ih].phase_solid.v
-            end
-
-            println("holdups[$(1)] = $(holdups[1])")
-            println("holdups[$(2)] = $(holdups[2])")
-            println("holdups[$(3)] = $(holdups[3])")
-            println("holdup volume = $(holdups[1].volume + holdups[2].volume + holdups[3].volume)")
-
-            Δt = Δt_vap + Δt_liq
-
-            println("Δt_vap = $(Δt_vap)")
-            println("Δt_liq = $(Δt_liq)")
-
-            # new level
-            for ih = eachindex(holdups)
-                tank_xsa_holdups[ih] = holdups[ih].volume/tank_length
-            end
-
-            volumeFraction = tank_xsa_holdups[3]/(pi*tank_radius^2)
-
-            if tank_xsa_holdups[3] > 10.0*eps(Float64)
-                if theta_solid == 0.0
-                    theta_solid = sqrt(0.9*volumeFraction)*360/180*pi
-                end
-                error = 1.0
-                while (error > 0.0001)
-                    f =  (tank_radius^2)*(theta_solid - sin(theta_solid)) - 2.0*tank_xsa_holdups[3]
-                    df_dtheta = (tank_radius^2)*(1.0 - cos(theta_solid))
-                    theta_solid = theta_solid - f/df_dtheta
-                    error = abs(f)
-                #    println("theta_solid = $(theta_solid), error = $(error)")
-                end
-            else
-                theta_solid = 0.0
-            end
-    
-            # height based on tank diamter
-            tank_diameter = 2.0*tank_radius
-            solidPercent = (1.0 - cos(theta_solid/2.0))/2.0*100.0
-            height_solid = tank_diameter*solidPercent/100.0
-        #    println("Solid Percent = $(solidPercent)")
-    
-            cord_solid = 2.0*tank_radius*sin(theta_solid/2.0)
-            interface_area_solid = cord_solid*tank_length
-
-            volumeFraction = (tank_xsa_holdups[2] + tank_xsa_holdups[3])/(pi*tank_radius^2)
-
-            if tank_xsa_holdups[2] + tank_xsa_holdups[3] > 10.0*eps(Float64)
-                if theta == 0.0
-                    theta = sqrt(0.9*volumeFraction)*360/180*pi
-                end
-                error = 1.0
-                while (error > 0.0001)
-                    f =  (tank_radius^2)*(theta - sin(theta)) - 2.0*(tank_xsa_holdups[2] + tank_xsa_holdups[3])
-                    df_dtheta = (tank_radius^2)*(1.0 - cos(theta))
-                    theta = theta - f/df_dtheta
-                    error = abs(f)
-                #    println("theta = $(theta), error = $(error)")
-                end
-            else
-                theta = 0.0
-            end
-
-            # height based on tank diamter
-            tank_diameter = 2.0*tank_radius
-            levelPercent = (1.0 - cos(theta/2.0))/2.0*100.0
-            height[2] = tank_diameter*levelPercent/100.0
-            height[1] = tank_diameter*(1.0 - levelPercent/100.0)
-        #    println("Level Percent = $(levelPercent)")
-
-            cord = 2.0*tank_radius*sin(theta/2.0)
-            interface_area = cord*tank_length
-
-            dia_min = 0.010
-            dia_vap = max(sqrt(4.0/pi*tank_xsa_holdups[1]), dia_min)
-            if tank_xsa_holdups[1] > pi/4.0*dia_min*dia_min
-                vel_vap = (Δmoles[1]/Δt)*holdups[1].v/tank_xsa_holdups[1]
-            else
-                vel_vap = (Δmoles[1]/Δt)*holdups[1].v/(pi/4.0*dia_min*dia_min)
-            end
-            rho_vap = 1.0/holdups[1].v # m3/mol
-            mu_vap = SuperTRAPP_mu(model,holdups[1].T,rho_vap,holdups[1].z) # Ps.s
-            lambda_vap = SuperTRAPP_lambda(model,holdups[1].T,rho_vap,holdups[1].z) # W/m/K
-            cp_vap = Clapeyron.VT_isobaric_heat_capacity(model,holdups[1].v,holdups[1].T,holdups[1].z)/holdups[1].mw # J/Kg/K
-
-            function alpha_vap(Tw, T, u, d, rho, mu, cp , lambda)
-                g = 9.8065
-                Pr = cp*mu/lambda
-                Re = rho*u*d/mu
-                NuLam = 0.0
-                NuTurb = 0.0
-                if Re > 1.0
-                    NuLam = 3.657
-                    f = 1.82 * log10(Re) - 1.64
-                    f = 1.0/f/f
-                    NuTurb = f/8.0*Re*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))
-                end
-                beta = 2.0/(Tw + T)
-                Gr = d*d*d*g*rho*rho*beta*abs(Tw - T)/mu/mu
-                NuNC = 0.825 + 0.387*(Gr*Pr / (1 + (0.492/Pr)^(9/16))^(16/9))^(1/6)
-                NuNC = NuNC * NuNC
-                Nu = sqrt(NuNC * NuNC + NuLam * NuLam + NuTurb * NuTurb)
-            return lambda*Nu/d
-
-            end
-
-            htc_vap = alpha_vap(Twall_vap+273.15, holdups[1].T, vel_vap, dia_vap, rho_vap*holdups[1].mw, mu_vap, cp_vap ,lambda_vap)
-
-            if holdups[1].volume < pi/4.0*dia_min*dia_min*tank_length
-                htc_vap = 0.0
-            end
-            
-        #    println("htc_vap = $(htc_vap)")
-
-            dia_liq = max(sqrt(4.0/pi*tank_xsa_holdups[2]), dia_min)
-            if tank_xsa_holdups[2] > pi/4.0*dia_min*dia_min
-                vel_liq = (Δmoles[2]/Δt)*holdups[2].v/tank_xsa_holdups[2]
-            else
-                vel_liq = (Δmoles[2]/Δt)*holdups[2].v/(pi/4.0*dia_min*dia_min)
-            end
-            rho_liq = 1.0/holdups[2].v
-            mu_liq = SuperTRAPP_mu(model,holdups[2].T,rho_liq,holdups[2].z)
-            lambda_liq = SuperTRAPP_lambda(model,holdups[2].T,rho_liq,holdups[2].z)
-            cp_liq = Clapeyron.VT_isobaric_heat_capacity(model,holdups[2].v,holdups[2].T,holdups[2].z)/holdups[2].mw
-
-            function alpha_liq(Tw, T, u, d, rho, mu, cp , lambda, BOILING)
-                g = 9.8065
-                Pr = cp*mu/lambda
-                Re = rho*u*d/mu
-                NuLam = 0.0
-                NuTurb = 0.0
-                if Re > 1.0
-                    NuLam = 3.657
-                    f = 1.82*log10(Re) - 1.64
-                    f = 1.0/f/f
-                    NuTurb = f/8.0*Re*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))
-                end
-                deltaT0 = 20000.0 / 3500.0
-                deltaT = Tw - T
-                if deltaT < 0.0 
-                    deltaT = 0.0
-                end
-                NuBOIL = d / lambda * 3500.0 * BOILING * (deltaT / deltaT0)^0.25
-                beta = 2.0/(Tw + T)
-                Gr = d*d*d*g*rho*rho*beta*abs(Tw - T)/mu/mu
-                NuNC = 0.825 + 0.387*(Gr*Pr / (1 + (0.492/Pr)^(9/16))^(16/9))^(1 /6)
-                NuNC = NuNC * NuNC
-                Nu = sqrt(NuNC * NuNC + NuLam * NuLam + NuTurb * NuTurb + NuBOIL * NuBOIL)
-                return lambda*Nu/d
-            end
-
-            htc_liq = alpha_liq(Twall_liq+273.15, holdups[2].T, vel_liq, dia_liq, rho_liq*holdups[2].mw, mu_liq, cp_liq ,lambda_liq, BOILING)
-        
-            if holdups[2].volume < pi/4.0*dia_min*dia_min*tank_length
-                htc_liq = 0.0
-            end
-
-        #    println("htc_liq = $(htc_liq)")
-
-            dia_solid = max(sqrt(4.0/pi*tank_xsa_holdups[3]), dia_min)
-            Nu_solid = 1.0
-            pratio = ps/200/1e6
-            A0 =  12.1860*pratio*pratio - 75.579*pratio + 166.6
-            A1 = -(9.2052*pratio*pratio - 46.508*pratio + 98.634)
-            A2 =  2.2499*pratio*pratio - 9.5547*pratio + 19.565
-            A3 = -(0.1788*pratio*pratio - 0.6566*pratio + 1.3047)
-            lambda_solid = exp(A0 + A1*log(Twall_solid+273.15) + A2*log(Twall_solid+273.15)^2 + A3*log(Twall_solid+273.15)^3) # W/m/K
-        #    println("lambda_solid = $(lambda_solid)")
-            htc_solid = Nu_solid*lambda_solid/dia_solid
-
-            if holdups[3].volume < pi/4.0*dia_min*dia_min*tank_length
-                htc_solid = 0.0
-            end
-
-        #    println("htc_solid = $(htc_solid)")
-
-            function alpha_ambient(Tw, T, u, d, rho, mu, cp , lambda)
-                g = 9.8065
-                Re = rho*u*d/mu
-                beta = 2.0/(Tw + T)
-                Gr = d*d*d*g*rho*rho*beta*abs(Tw - T)/mu/mu
-                Pr = cp*mu/lambda
-                Re = sqrt(Re*Re + Gr/2.5)
-                NuLam = 0.664*sqrt(Re)*Pr^(1/3)
-                NuTurb = 0.037*(Re^0.9)*Pr/(Re^0.1 + 2.443 * (Pr^(2/3) - 1.0))
-
-                Nu = 0.3 + sqrt(NuLam * NuLam + NuTurb * NuTurb)
-                return lambda*Nu/d
-            end
-
-            
-            htc_ambient = alpha_ambient(Twall_outer+273.15, T_ambient+273.15, u_ambient, tank_diameter, rho_ambient*mwAir, mu_ambient, cp_ambient , lambda_ambient)
-
-        #    println("htc_ambient = $(htc_ambient)")
-
-            function alpha_noz(Tw, T, u, d, rho, mu, cp , lambda)
-                g = 9.8065
-                Pr = cp*mu/lambda
-                Re = rho*u*d/mu
-                NuLam = 0.0
-                NuTurb = 0.0
-                if Re > 1.0
-                    NuLam = 3.657
-                    f = 1.82 * log10(Re) - 1.64
-                    f = 1.0/f/f
-                    NuTurb = f/8.0*Re*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))
-                end
-                beta = 2.0/(Tw + T)
-                Gr = d*d*d*g*rho*rho*beta*abs(Tw - T)/mu/mu
-                NuNC = 0.825 + 0.387*(Gr*Pr / (1 + (0.492/Pr)^(9/16))^(16/9))^(1/6)
-                NuNC = NuNC * NuNC
-                Nu = sqrt(NuNC * NuNC + NuLam * NuLam + NuTurb * NuTurb)
-            return lambda*Nu/d
-
-            end
-
-            if Δmoles[1] > 0.0
-                vel_noz_vap = flowout_vap*holdups[1].v/(pi/4*d2^2)
-            else
-                vel_noz_vap = 0.0
-            end
-            htc_noz_vap = alpha_noz(Twall_noz+273.15, holdups[1].T, vel_noz_vap, d2, rho_vap*holdups[1].mw, mu_vap, cp_vap ,lambda_vap)
-        #    println("htc_noz_vap = $(htc_noz_vap)")
-            if Δmoles[2] > 0.0
-                vel_noz_liq = flowout_liq*holdups[2].v/(pi/4*d2^2)
-            else
-                vel_noz_liq = 0.0
-            end
-            htc_noz_liq = alpha_noz(Twall_noz+273.15, holdups[2].T, vel_noz_liq, d2, rho_liq*holdups[2].mw, mu_liq, cp_liq ,lambda_liq)
-        #    println("htc_noz_liq = $(htc_noz_liq)")
-            htc_ambient_noz = alpha_ambient(Twall_noz+273.15, T_ambient+273.15, u_ambient, d2+2.0*overall_thickness, rho_ambient*mwAir, mu_ambient, cp_ambient , lambda_ambient)
-            htc_insulation_noz = lambda_insulation/((d2/2.0)*log((d2/2.0+insulation_thickness)/(d2/2.0)))
-            htc_ambient_overall = htc_ambient_noz*htc_insulation_noz/(htc_ambient_noz + htc_insulation_noz)
-        #    println("htc_ambient_overall = $(htc_ambient_overall)")
-            Twall_noz = (d2*Δt_vap*htc_noz_vap*(holdups[1].T - 273.15) + d2*Δt_liq*htc_noz_liq*(holdups[2].T - 273.15) + d2*Δt*htc_ambient_overall*T_ambient + cp_steel*rho_steel*((d2 + 2.0*wall_thickness)^2 - d2^2)/4*Twall_noz)/(cp_steel*rho_steel*((d2 + 2.0*wall_thickness)^2 - d2^2)/4 + d2*Δt_vap*htc_noz_vap + d2*Δt_liq*htc_noz_liq + d2*Δt*htc_ambient_overall)
-
-            # then we use Ferrite to model finite element wall and do a transient step for the Δt
-
-            # Start wall calc using Ferrite
-            htcf1 = htc_solid
-            Tf1 = holdups[3].T-273.15
-            htcf2 = htc_liq
-            Tf2 = holdups[2].T-273.15
-            htcf3 = htc_vap
-            Tf3 = holdups[1].T-273.15
-            htcf4 = htc_ambient
-            Tf4 = T_ambient
-            LL = height[2] - tank_radius
-            SL = height_solid - tank_radius
-
-            K = allocate_matrix(dh)
-            f = zeros(ndofs(dh))
-            M = allocate_matrix(dh)
-
-            K, f = doassemble_Kf!(K, f, cellvalues, dh)
-            # need to modify RobinBC for solid and liquid levels SL and LL
-            K, f = doassemble_Kf_RobinBC!(K, f, cellvalues,  dh, SL, LL, htcf1, Tf1, htcf2, Tf2, htcf3, Tf3, htcf4, Tf4)
-            M = doassemble_M!(M, cellvalues, dh)
-
-            A = (Δt .* K) + M
-            b = Δt .* f .+ M * uₙ
-
-            u = A \ b
-
-            length_inner = pi*tank_diamter
-            length_outer = pi*(tank_diamter + overall_thickness)
-
-            npoints = Int(floor((length_inner + length_outer)/2/h))
-
-            points = [Vec(((tank_radius+overall_thickness-0.0001)*cos(theta), (tank_radius+overall_thickness-0.0001)*sin(theta))) for theta in range(-pi/2, pi/2, length = npoints)];
-            ph = PointEvalHandler(grid, points);
-            u_points = evaluate_at_points(ph, dh, u, :u);
-
-            Twall_outer = 0.0
-            icount = 0
-            for ipoints = 1:npoints
-                icount += 1
-                Twall_outer += u_points[ipoints]
-            end
-
-            if icount > 0
-                Twall_outer /= icount
-            else
-                Twall_outer = T_ambient
-            end
-
-        #    println("Twall_outer = $(Twall_outer)")
-
-            q_gp = compute_heat_fluxes(cellvalues, dh, u);
-            projector = L2Projector(ip, grid);
-            q_projected = project(projector, q_gp, qr);
-            points = [Vec((tank_radius*cos(theta), tank_radius*sin(theta))) for theta in range(-pi/2, pi/2, length = npoints)];
-            ph = PointEvalHandler(grid, points);
-            q_points = evaluate_at_points(ph, projector, q_projected);
-            u_points = evaluate_at_points(ph, dh, u, :u);
-
-            # this is inner wall temperature
-            Twallmin = u_points[1]
-            ipoints_min = 1
-            for ipoints = 2:npoints
-                if u_points[ipoints] < Twallmin
-                    Twallmin = u_points[ipoints]
-                    ipoints_min = ipoints
-                end
-            end
-
-            Twall_solid = 0.0
-            icount_solid = 0
-            Twall_liq = 0.0
-            icount_liq = 0
-            Twall_vap = 0.0
-            icount_vap = 0
-            for ipoints = 1:npoints
-                if points[ipoints][2] < SL
-                    icount_solid += 1
-                    Twall_solid += u_points[ipoints]
-                elseif points[ipoints][2] >= SL && points[ipoints][2] <= LL
-                    icount_liq += 1
-                    Twall_liq += u_points[ipoints]
-                else
-                    icount_vap += 1
-                    Twall_vap += u_points[ipoints]
-                end
-            end
-
-            if icount_solid > 0
-                Twall_solid /= icount_solid
-            else
-                Twall_solid = u_points[1]
-            end
-
-            if icount_liq > 0
-                Twall_liq /= icount_liq
-            else
-                Twall_liq = u_points[1]
-            end
-
-            if icount_vap > 0
-                Twall_vap /= icount_vap
-            else
-                Twall_vap = u_points[npoints]
-            end
-
-        #    println("Twall_vap = $(Twall_vap)")
-        #    println("Twall_liq = $(Twall_liq)")
-        #    println("Twall_solid = $(Twall_solid)")
-
-            perimiter = [tank_radius*theta for theta in range(0.0, pi, length = npoints)];
-
-            heat_flux_mag = zeros(npoints)
-            for ipoints = 1:npoints
-                heat_flux_mag[ipoints] = sqrt((q_points[ipoints][1])^2 + (q_points[ipoints][2])^2)
-            end
-
-            Q_wallsolid = 0.0
-            Q_wallliq = 0.0
-            Q_wallvap = 0.0
-
-            for ipoints = 2:npoints
-                dp = perimiter[ipoints] - perimiter[ipoints-1]
-                if points[ipoints][2] < SL
-                    Q_wallsolid += 0.5*(heat_flux_mag[ipoints-1] + heat_flux_mag[ipoints])*dp*tank_length
-                elseif points[ipoints][2] >= SL && points[ipoints][2] <= LL
-                    Q_wallliq += 0.5*(heat_flux_mag[ipoints-1] + heat_flux_mag[ipoints])*dp*tank_length
-                else
-                    Q_wallvap += 0.5*(heat_flux_mag[ipoints-1] + heat_flux_mag[ipoints])*dp*tank_length
-                end
-            end
-
-            # factor 2 for both sides of wall
-            Q_wallsolid *= 2.0*Δt
-            Q_wallliq   *= 2.0*Δt
-            Q_wallvap   *= 2.0*Δt
-
-        #    println("Q_wallvap   = $(Q_wallvap)")
-        #    println("Q_wallliq   = $(Q_wallliq)")
-        #    println("Q_wallsolid = $(Q_wallsolid)")
-
-            # End wall calc
-
-            # find T at outside of steel
-
-            points = [Vec(((tank_radius+wall_thickness)*cos(theta), (tank_radius+wall_thickness)*sin(theta))) for theta in range(-pi/2, pi/2, length = npoints)];
-            ph = PointEvalHandler(grid, points);
-            u_points = evaluate_at_points(ph, dh, u, :u);
-
-            Twallmin_out = u_points[ipoints_min]
-            Twallmin_av = 0.5*(Twallmin_out + Twallmin)
-
-            # htc for interface ~ 1/alpha = 1/alpha_vap + 1/alpha_liq, alpha_liq is not boiling part is just convective
-            if htc_vap + htc_liq > 0.0
-                htc_vap_liq = htc_vap*htc_liq/(htc_vap + htc_liq)
-            else
-                htc_vap_liq = 0.0
-            end
-            if htc_liq + htc_solid > 0.0
-                htc_liq_solid = htc_liq*htc_solid/(htc_liq + htc_solid)
-            else
-                htc_liq_solid = 0.0
-            end
-
-            if holdups[1].moles > 0.0 && holdups[2].moles > 0.0
-                Q_liqvap = Δt*htc_vap_liq*interface_area*(holdups[2].T - holdups[1].T)
-                ΔQ[1] = Q_liqvap
-                Q_vapliq = Δt*htc_vap_liq*interface_area*(holdups[1].T - holdups[2].T)
-                ΔQ[2] = Q_vapliq
-            else
-                ΔQ[1] = 0.0
-                ΔQ[2] = 0.0
-            end
-
-            if holdups[1].moles > 0.0
-                ΔQ[1] += Q_wallvap
-            end
-
-            if holdups[2].moles > 0.0
-                ΔQ[2] += Q_wallliq
-            end
-
-            if holdups[3].moles > 0.0 && holdups[2].moles > 0.0
-                Q_liqsolid = Δt*htc_liq_solid*interface_area_solid*(holdups[2].T - holdups[3].T)
-                ΔQ[3] = Q_liqsolid
-                Q_solidliq = Δt*htc_liq_solid*interface_area_solid*(holdups[3].T - holdups[2].T)
-                ΔQ[2] += Q_solidliq
-            else
-                ΔQ[3] = 0.0
-            end
-
-            if holdups[3].moles > 0.0
-                ΔQ[3] += Q_wallsolid
-            end
-
-            if Δv_old < 1.0
+                    if Δv_old < 1.0
                 Δv_error = abs(Δv - Δv_old)
             else
                 Δv_error = abs(Δv/Δv_old - 1.0)
@@ -3328,6 +2791,485 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
             Δv_old = Δv
 
         end # end of iteration to set volume of phases = tank volume
+
+        pcrit_vap = pcrit_ratio_vap*holdups[1].p
+        flowout_vap, pcrit_vap, Tcrit_vap, Tout_vap = orificeFlow(model,holdups[1].p,holdups[1].T,holdups[1].z,pcrit_vap,Tcrit_vap,pout_vap,Tout_vap,d1,d2,Cdliq,Cdvap,false)
+        
+        pcrit_liq = pcrit_ratio_liq*holdups[2].p
+        flowout_liq, pcrit_liq, Tcrit_liq, Tout_liq = orificeFlow(model,holdups[2].p,holdups[2].T,holdups[2].z,pcrit_liq,Tcrit_liq,pout_liq,Tout_liq,d1,d2,Cdliq,Cdvap,false)
+
+        flowout_vap /= number_tanks_parallel
+        flowout_liq /= number_tanks_parallel
+        
+        pcrit_ratio_vap = pcrit_vap/holdups[1].p
+        pcrit_ratio_liq = pcrit_liq/holdups[2].p
+
+        # new level
+        for ih = eachindex(holdups)
+            tank_xsa_holdups[ih] = holdups[ih].volume/tank_length
+        end
+
+        volumeFraction = tank_xsa_holdups[3]/(pi*tank_radius^2)
+
+        if tank_xsa_holdups[3] > 10.0*eps(Float64)
+            if theta_solid == 0.0
+                theta_solid = sqrt(0.9*volumeFraction)*360/180*pi
+            end
+            error = 1.0
+            while (error > 0.0001)
+                f =  (tank_radius^2)*(theta_solid - sin(theta_solid)) - 2.0*tank_xsa_holdups[3]
+                df_dtheta = (tank_radius^2)*(1.0 - cos(theta_solid))
+                theta_solid = theta_solid - f/df_dtheta
+                error = abs(f)
+            end
+        else
+            theta_solid = 0.0
+        end
+
+        # height based on tank diamter
+        tank_diameter = 2.0*tank_radius
+        solidPercent = (1.0 - cos(theta_solid/2.0))/2.0*100.0
+        height_solid = tank_diameter*solidPercent/100.0
+
+        cord_solid = 2.0*tank_radius*sin(theta_solid/2.0)
+        interface_area_solid = cord_solid*tank_length
+
+        volumeFraction = (tank_xsa_holdups[2] + tank_xsa_holdups[3])/(pi*tank_radius^2)
+
+        if tank_xsa_holdups[2] + tank_xsa_holdups[3] > 10.0*eps(Float64)
+            if theta == 0.0
+                theta = sqrt(0.9*volumeFraction)*360/180*pi
+            end
+            error = 1.0
+            while (error > 0.0001)
+                f =  (tank_radius^2)*(theta - sin(theta)) - 2.0*(tank_xsa_holdups[2] + tank_xsa_holdups[3])
+                df_dtheta = (tank_radius^2)*(1.0 - cos(theta))
+                theta = theta - f/df_dtheta
+                error = abs(f)
+            end
+        else
+            theta = 0.0
+        end
+
+        # height based on tank diamter
+        tank_diameter = 2.0*tank_radius
+        levelPercent = (1.0 - cos(theta/2.0))/2.0*100.0
+        height[2] = tank_diameter*levelPercent/100.0
+        height[1] = tank_diameter*(1.0 - levelPercent/100.0)
+
+        cord = 2.0*tank_radius*sin(theta/2.0)
+        interface_area = cord*tank_length
+
+        if topflow
+            level_noz = levelPercent/100.0
+            #volume_fraction_noz = alpha_lag*max(min((1.0 - level_noz)/level_min,1.0),0.0) + (1.0 - alpha_lag)*volume_fraction_noz
+            volume_fraction_noz = max(min((1.0 - level_noz)/level_min,1.0),0.0)
+            println("volume_fraction_noz = $(volume_fraction_noz)")
+            Δvolume[1] = min(Δv,holdups[1].volume*volume_fraction_noz)
+            Δvolume[2] = Δv - Δv_vap
+            Δt_liq = Δvolume[2]/(flowout_liq*holdups[2].v)
+            Δt_vap = Δvolume[1]/(flowout_vap*holdups[1].v)
+            holdups[2].volume -= Δvolume[2]
+            Δmoles[2] = max(holdups[2].moles - holdups[2].volume/holdups[2].v,0.0)
+            holdups[2].moles -= Δmoles[2]
+            holdups[1].volume -= Δvolume[1]
+            Δmoles[1] = max(holdups[1].moles - holdups[1].volume/holdups[1].v,0.0)
+            holdups[1].moles -= Δmoles[1]
+        else
+            level_noz = (levelPercent - solidPercent)/100.0
+            #volume_fraction_noz = alpha_lag*max(min(level_noz/level_min,1.0),0.0) + (1.0 - alpha_lag)*volume_fraction_noz
+            volume_fraction_noz = max(min(level_noz/level_min,1.0),0.0)
+            println("volume_fraction_noz = $(volume_fraction_noz)")
+            Δvolume[2] = min(Δv,holdups[2].volume*volume_fraction_noz)
+            Δvolume[1] = Δv - Δvolume[2]
+            Δt_liq = Δvolume[2]/(flowout_liq*holdups[2].v)
+            Δt_vap = Δvolume[1]/(flowout_vap*holdups[1].v)
+            holdups[2].volume -= Δvolume[2]
+            Δmoles[2] = max(holdups[2].moles - holdups[2].volume/holdups[2].v,0.0)
+            holdups[2].moles -= Δmoles[2]
+            holdups[1].volume -= Δvolume[1]
+            Δmoles[1] = max(holdups[1].moles - holdups[1].volume/holdups[1].v,0.0)
+            holdups[1].moles -= Δmoles[1]
+        end
+
+        # update moles and volume
+        for ih = 1:2
+            for ip = eachindex(holdups[ih].phases)
+                holdups[ih].phases[ip].moles  = holdups[ih].phases[ip].β*holdups[ih].moles
+                holdups[ih].phases[ip].volume = holdups[ih].phases[ip].moles*holdups[ih].phases[ip].v
+            end
+            holdups[ih].phase_solid.moles  = holdups[ih].phase_solid.β*holdups[ih].moles
+            holdups[ih].phase_solid.volume = holdups[ih].phase_solid.moles*holdups[ih].phase_solid.v
+        end
+
+    #    println("holdups[$(1)] = $(holdups[1])")
+    #    println("holdups[$(2)] = $(holdups[2])")
+    #    println("holdups[$(3)] = $(holdups[3])")
+    #    println("holdup volume = $(holdups[1].volume + holdups[2].volume + holdups[3].volume)")
+
+        Δt = Δt_vap + Δt_liq
+
+        println("Δt_vap = $(Δt_vap)")
+        println("Δt_liq = $(Δt_liq)")
+
+        dia_min = 0.010
+        dia_vap = max(sqrt(4.0/pi*tank_xsa_holdups[1]), dia_min)
+        if tank_xsa_holdups[1] > pi/4.0*dia_min*dia_min
+            vel_vap = (Δmoles[1]/Δt)*holdups[1].v/tank_xsa_holdups[1]
+        else
+            vel_vap = (Δmoles[1]/Δt)*holdups[1].v/(pi/4.0*dia_min*dia_min)
+        end
+        rho_vap = 1.0/holdups[1].v # m3/mol
+        mu_vap = SuperTRAPP_mu(model,holdups[1].T,rho_vap,holdups[1].z) # Ps.s
+        lambda_vap = SuperTRAPP_lambda(model,holdups[1].T,rho_vap,holdups[1].z) # W/m/K
+        cp_vap = Clapeyron.VT_isobaric_heat_capacity(model,holdups[1].v,holdups[1].T,holdups[1].z)/holdups[1].mw # J/Kg/K
+
+        function alpha_vap(Tw, T, u, d, rho, mu, cp , lambda)
+            g = 9.8065
+            Pr = cp*mu/lambda
+            Re = rho*u*d/mu
+            NuLam = 0.0
+            NuTurb = 0.0
+            if Re > 1.0
+                NuLam = 3.657
+                f = 1.82 * log10(Re) - 1.64
+                f = 1.0/f/f
+                NuTurb = f/8.0*Re*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))
+            end
+            beta = 2.0/(Tw + T)
+            Gr = d*d*d*g*rho*rho*beta*abs(Tw - T)/mu/mu
+            NuNC = 0.825 + 0.387*(Gr*Pr / (1 + (0.492/Pr)^(9/16))^(16/9))^(1/6)
+            NuNC = NuNC * NuNC
+            Nu = sqrt(NuNC * NuNC + NuLam * NuLam + NuTurb * NuTurb)
+        return lambda*Nu/d
+
+        end
+
+        htc_vap = alpha_vap(Twall_vap+273.15, holdups[1].T, vel_vap, dia_vap, rho_vap*holdups[1].mw, mu_vap, cp_vap ,lambda_vap)
+
+        if holdups[1].volume < pi/4.0*dia_min*dia_min*tank_length
+            htc_vap = 0.0
+        end
+        
+    #    println("htc_vap = $(htc_vap)")
+
+        dia_liq = max(sqrt(4.0/pi*tank_xsa_holdups[2]), dia_min)
+        if tank_xsa_holdups[2] > pi/4.0*dia_min*dia_min
+            vel_liq = (Δmoles[2]/Δt)*holdups[2].v/tank_xsa_holdups[2]
+        else
+            vel_liq = (Δmoles[2]/Δt)*holdups[2].v/(pi/4.0*dia_min*dia_min)
+        end
+        rho_liq = 1.0/holdups[2].v
+        mu_liq = SuperTRAPP_mu(model,holdups[2].T,rho_liq,holdups[2].z)
+        lambda_liq = SuperTRAPP_lambda(model,holdups[2].T,rho_liq,holdups[2].z)
+        cp_liq = Clapeyron.VT_isobaric_heat_capacity(model,holdups[2].v,holdups[2].T,holdups[2].z)/holdups[2].mw
+
+        function alpha_liq(Tw, T, u, d, rho, mu, cp , lambda, BOILING)
+            g = 9.8065
+            Pr = cp*mu/lambda
+            Re = rho*u*d/mu
+            NuLam = 0.0
+            NuTurb = 0.0
+            if Re > 1.0
+                NuLam = 3.657
+                f = 1.82*log10(Re) - 1.64
+                f = 1.0/f/f
+                NuTurb = f/8.0*Re*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))
+            end
+            deltaT0 = 20000.0 / 3500.0
+            deltaT = Tw - T
+            if deltaT < 0.0 
+                deltaT = 0.0
+            end
+            NuBOIL = d / lambda * 3500.0 * BOILING * (deltaT / deltaT0)^0.25
+            beta = 2.0/(Tw + T)
+            Gr = d*d*d*g*rho*rho*beta*abs(Tw - T)/mu/mu
+            NuNC = 0.825 + 0.387*(Gr*Pr / (1 + (0.492/Pr)^(9/16))^(16/9))^(1 /6)
+            NuNC = NuNC * NuNC
+            Nu = sqrt(NuNC * NuNC + NuLam * NuLam + NuTurb * NuTurb + NuBOIL * NuBOIL)
+            return lambda*Nu/d
+        end
+
+        htc_liq = alpha_liq(Twall_liq+273.15, holdups[2].T, vel_liq, dia_liq, rho_liq*holdups[2].mw, mu_liq, cp_liq ,lambda_liq, BOILING)
+    
+        if holdups[2].volume < pi/4.0*dia_min*dia_min*tank_length
+            htc_liq = 0.0
+        end
+
+    #    println("htc_liq = $(htc_liq)")
+
+        dia_solid = max(sqrt(4.0/pi*tank_xsa_holdups[3]), dia_min)
+        Nu_solid = 1.0
+        pratio = ps/200/1e6
+        A0 =  12.1860*pratio*pratio - 75.579*pratio + 166.6
+        A1 = -(9.2052*pratio*pratio - 46.508*pratio + 98.634)
+        A2 =  2.2499*pratio*pratio - 9.5547*pratio + 19.565
+        A3 = -(0.1788*pratio*pratio - 0.6566*pratio + 1.3047)
+        lambda_solid = exp(A0 + A1*log(Twall_solid+273.15) + A2*log(Twall_solid+273.15)^2 + A3*log(Twall_solid+273.15)^3) # W/m/K
+    #    println("lambda_solid = $(lambda_solid)")
+        htc_solid = Nu_solid*lambda_solid/dia_solid
+
+        if holdups[3].volume < pi/4.0*dia_min*dia_min*tank_length
+            htc_solid = 0.0
+        end
+
+    #    println("htc_solid = $(htc_solid)")
+
+        function alpha_ambient(Tw, T, u, d, rho, mu, cp , lambda)
+            g = 9.8065
+            Re = rho*u*d/mu
+            beta = 2.0/(Tw + T)
+            Gr = d*d*d*g*rho*rho*beta*abs(Tw - T)/mu/mu
+            Pr = cp*mu/lambda
+            Re = sqrt(Re*Re + Gr/2.5)
+            NuLam = 0.664*sqrt(Re)*Pr^(1/3)
+            NuTurb = 0.037*(Re^0.9)*Pr/(Re^0.1 + 2.443 * (Pr^(2/3) - 1.0))
+
+            Nu = 0.3 + sqrt(NuLam * NuLam + NuTurb * NuTurb)
+            return lambda*Nu/d
+        end
+
+        
+        htc_ambient = alpha_ambient(Twall_outer+273.15, T_ambient+273.15, u_ambient, tank_diameter, rho_ambient*mwAir, mu_ambient, cp_ambient , lambda_ambient)
+
+    #    println("htc_ambient = $(htc_ambient)")
+
+        function alpha_noz(Tw, T, u, d, rho, mu, cp , lambda)
+            g = 9.8065
+            Pr = cp*mu/lambda
+            Re = rho*u*d/mu
+            NuLam = 0.0
+            NuTurb = 0.0
+            if Re > 1.0
+                NuLam = 3.657
+                f = 1.82 * log10(Re) - 1.64
+                f = 1.0/f/f
+                NuTurb = f/8.0*Re*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))
+            end
+            beta = 2.0/(Tw + T)
+            Gr = d*d*d*g*rho*rho*beta*abs(Tw - T)/mu/mu
+            NuNC = 0.825 + 0.387*(Gr*Pr / (1 + (0.492/Pr)^(9/16))^(16/9))^(1/6)
+            NuNC = NuNC * NuNC
+            Nu = sqrt(NuNC * NuNC + NuLam * NuLam + NuTurb * NuTurb)
+        return lambda*Nu/d
+
+        end
+
+        if Δmoles[1] > tiny_holdup
+            vel_noz_vap = flowout_vap*holdups[1].v/(pi/4*d2^2)
+        else
+            vel_noz_vap = 0.0
+        end
+        htc_noz_vap = alpha_noz(Twall_noz+273.15, holdups[1].T, vel_noz_vap, d2, rho_vap*holdups[1].mw, mu_vap, cp_vap ,lambda_vap)
+    #    println("htc_noz_vap = $(htc_noz_vap)")
+        if Δmoles[2] > tiny_holdup
+            vel_noz_liq = flowout_liq*holdups[2].v/(pi/4*d2^2)
+        else
+            vel_noz_liq = 0.0
+        end
+        htc_noz_liq = alpha_noz(Twall_noz+273.15, holdups[2].T, vel_noz_liq, d2, rho_liq*holdups[2].mw, mu_liq, cp_liq ,lambda_liq)
+    #    println("htc_noz_liq = $(htc_noz_liq)")
+        htc_ambient_noz = alpha_ambient(Twall_noz+273.15, T_ambient+273.15, u_ambient, d2+2.0*overall_thickness, rho_ambient*mwAir, mu_ambient, cp_ambient , lambda_ambient)
+        htc_insulation_noz = lambda_insulation/((d2/2.0)*log((d2/2.0+insulation_thickness)/(d2/2.0)))
+        htc_ambient_overall = htc_ambient_noz*htc_insulation_noz/(htc_ambient_noz + htc_insulation_noz)
+    #    println("htc_ambient_overall = $(htc_ambient_overall)")
+        Twall_noz = (d2*Δt_vap*htc_noz_vap*(holdups[1].T - 273.15) + d2*Δt_liq*htc_noz_liq*(holdups[2].T - 273.15) + d2*Δt*htc_ambient_overall*T_ambient + cp_steel*rho_steel*((d2 + 2.0*wall_thickness)^2 - d2^2)/4*Twall_noz)/(cp_steel*rho_steel*((d2 + 2.0*wall_thickness)^2 - d2^2)/4 + d2*Δt_vap*htc_noz_vap + d2*Δt_liq*htc_noz_liq + d2*Δt*htc_ambient_overall)
+
+        # then we use Ferrite to model finite element wall and do a transient step for the Δt
+
+        # Start wall calc using Ferrite
+        htcf1 = htc_solid
+        Tf1 = holdups[3].T-273.15
+        htcf2 = htc_liq
+        Tf2 = holdups[2].T-273.15
+        htcf3 = htc_vap
+        Tf3 = holdups[1].T-273.15
+        htcf4 = htc_ambient
+        Tf4 = T_ambient
+        LL = height[2] - tank_radius
+        SL = height_solid - tank_radius
+
+        K = allocate_matrix(dh)
+        f = zeros(ndofs(dh))
+        M = allocate_matrix(dh)
+
+        K, f = doassemble_Kf!(K, f, cellvalues, dh)
+        # need to modify RobinBC for solid and liquid levels SL and LL
+        K, f = doassemble_Kf_RobinBC!(K, f, cellvalues,  dh, SL, LL, htcf1, Tf1, htcf2, Tf2, htcf3, Tf3, htcf4, Tf4)
+        M = doassemble_M!(M, cellvalues, dh)
+
+        A = (Δt .* K) + M
+        b = Δt .* f .+ M * uₙ
+
+        u = A \ b
+
+        length_inner = pi*tank_diamter
+        length_outer = pi*(tank_diamter + overall_thickness)
+
+        npoints = Int(floor((length_inner + length_outer)/2/h))
+
+        points = [Vec(((tank_radius+overall_thickness-0.0001)*cos(theta), (tank_radius+overall_thickness-0.0001)*sin(theta))) for theta in range(-pi/2, pi/2, length = npoints)];
+        ph = PointEvalHandler(grid, points);
+        u_points = evaluate_at_points(ph, dh, u, :u);
+
+        Twall_outer = 0.0
+        icount = 0
+        for ipoints = 1:npoints
+            icount += 1
+            Twall_outer += u_points[ipoints]
+        end
+
+        if icount > 0
+            Twall_outer /= icount
+        else
+            Twall_outer = T_ambient
+        end
+
+    #    println("Twall_outer = $(Twall_outer)")
+
+        q_gp = compute_heat_fluxes(cellvalues, dh, u);
+        projector = L2Projector(ip, grid);
+        q_projected = project(projector, q_gp, qr);
+        points = [Vec((tank_radius*cos(theta), tank_radius*sin(theta))) for theta in range(-pi/2, pi/2, length = npoints)];
+        ph = PointEvalHandler(grid, points);
+        q_points = evaluate_at_points(ph, projector, q_projected);
+        u_points = evaluate_at_points(ph, dh, u, :u);
+
+        # this is inner wall temperature
+        Twallmin = u_points[1]
+        ipoints_min = 1
+        for ipoints = 2:npoints
+            if u_points[ipoints] < Twallmin
+                Twallmin = u_points[ipoints]
+                ipoints_min = ipoints
+            end
+        end
+
+        Twall_solid = 0.0
+        icount_solid = 0
+        Twall_liq = 0.0
+        icount_liq = 0
+        Twall_vap = 0.0
+        icount_vap = 0
+        for ipoints = 1:npoints
+            if points[ipoints][2] < SL
+                icount_solid += 1
+                Twall_solid += u_points[ipoints]
+            elseif points[ipoints][2] >= SL && points[ipoints][2] <= LL
+                icount_liq += 1
+                Twall_liq += u_points[ipoints]
+            else
+                icount_vap += 1
+                Twall_vap += u_points[ipoints]
+            end
+        end
+
+        if icount_solid > 0
+            Twall_solid /= icount_solid
+        else
+            Twall_solid = u_points[1]
+        end
+
+        if icount_liq > 0
+            Twall_liq /= icount_liq
+        else
+            Twall_liq = u_points[1]
+        end
+
+        if icount_vap > 0
+            Twall_vap /= icount_vap
+        else
+            Twall_vap = u_points[npoints]
+        end
+
+    #    println("Twall_vap = $(Twall_vap)")
+    #    println("Twall_liq = $(Twall_liq)")
+    #    println("Twall_solid = $(Twall_solid)")
+
+        perimiter = [tank_radius*theta for theta in range(0.0, pi, length = npoints)];
+
+        heat_flux_mag = zeros(npoints)
+        for ipoints = 1:npoints
+            heat_flux_mag[ipoints] = sqrt((q_points[ipoints][1])^2 + (q_points[ipoints][2])^2)
+        end
+
+        Q_wallsolid = 0.0
+        Q_wallliq = 0.0
+        Q_wallvap = 0.0
+
+        for ipoints = 2:npoints
+            dp = perimiter[ipoints] - perimiter[ipoints-1]
+            if points[ipoints][2] < SL
+                Q_wallsolid += 0.5*(heat_flux_mag[ipoints-1] + heat_flux_mag[ipoints])*dp*tank_length
+            elseif points[ipoints][2] >= SL && points[ipoints][2] <= LL
+                Q_wallliq += 0.5*(heat_flux_mag[ipoints-1] + heat_flux_mag[ipoints])*dp*tank_length
+            else
+                Q_wallvap += 0.5*(heat_flux_mag[ipoints-1] + heat_flux_mag[ipoints])*dp*tank_length
+            end
+        end
+
+        # factor 2 for both sides of wall
+        Q_wallsolid *= 2.0*Δt
+        Q_wallliq   *= 2.0*Δt
+        Q_wallvap   *= 2.0*Δt
+
+    #    println("Q_wallvap   = $(Q_wallvap)")
+    #    println("Q_wallliq   = $(Q_wallliq)")
+    #    println("Q_wallsolid = $(Q_wallsolid)")
+
+        # End wall calc
+
+        # find T at outside of steel
+
+        points = [Vec(((tank_radius+wall_thickness)*cos(theta), (tank_radius+wall_thickness)*sin(theta))) for theta in range(-pi/2, pi/2, length = npoints)];
+        ph = PointEvalHandler(grid, points);
+        u_points = evaluate_at_points(ph, dh, u, :u);
+
+        Twallmin_out = u_points[ipoints_min]
+        Twallmin_av = 0.5*(Twallmin_out + Twallmin)
+
+        # htc for interface ~ 1/alpha = 1/alpha_vap + 1/alpha_liq, alpha_liq is not boiling part is just convective
+        if htc_vap + htc_liq > 0.0
+            htc_vap_liq = htc_vap*htc_liq/(htc_vap + htc_liq)
+        else
+            htc_vap_liq = 0.0
+        end
+        if htc_liq + htc_solid > 0.0
+            htc_liq_solid = htc_liq*htc_solid/(htc_liq + htc_solid)
+        else
+            htc_liq_solid = 0.0
+        end
+
+        if holdups[1].moles > 0.0 && holdups[2].moles > 0.0
+            Q_liqvap = Δt*htc_vap_liq*interface_area*(holdups[2].T - holdups[1].T)
+            ΔQ[1] = Q_liqvap
+            Q_vapliq = Δt*htc_vap_liq*interface_area*(holdups[1].T - holdups[2].T)
+            ΔQ[2] = Q_vapliq
+        else
+            ΔQ[1] = 0.0
+            ΔQ[2] = 0.0
+        end
+
+        if holdups[1].moles > 0.0
+            ΔQ[1] += Q_wallvap
+        end
+
+        if holdups[2].moles > 0.0
+            ΔQ[2] += Q_wallliq
+        end
+
+        if holdups[3].moles > 0.0 && holdups[2].moles > 0.0
+            Q_liqsolid = Δt*htc_liq_solid*interface_area_solid*(holdups[2].T - holdups[3].T)
+            ΔQ[3] = Q_liqsolid
+            Q_solidliq = Δt*htc_liq_solid*interface_area_solid*(holdups[3].T - holdups[2].T)
+            ΔQ[2] += Q_solidliq
+        else
+            ΔQ[3] = 0.0
+        end
+
+        if holdups[3].moles > 0.0
+            ΔQ[3] += Q_wallsolid
+        end
 
         println("holdups[$(1)] = $(holdups[1])")
         println("holdups[$(2)] = $(holdups[2])")
@@ -3381,13 +3323,13 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
         println("ΔQ[2] = $(ΔQ[2]) J")
         println("ΔQ[3] = $(ΔQ[3]) J")
 
-        if Δmoles[1] > 0.0
+        if Δmoles[1] > tiny_holdup
             fv_plot = flowout_vap*holdups[1].mw
         else
             fv_plot = 0.0
         end
 
-        if Δmoles[2] > 0.0
+        if Δmoles[2] > tiny_holdup
             fl_plot = flowout_liq*holdups[2].mw
         else
             fl_plot = 0.0
@@ -3538,7 +3480,7 @@ end
 delta_P = 0.125e5
 
 pe = 1.0e5
-#pe = 5.0e5
+#pe = 25.5e5
 
 nstep = Int((ps - pe)/delta_P)
 println("nstep = $(nstep)")

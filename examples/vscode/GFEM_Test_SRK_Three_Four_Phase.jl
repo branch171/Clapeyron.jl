@@ -10,7 +10,7 @@ T = 5+273.15
 
 z=ones(length(model))/length(model)
 
-verbose = false
+verbose = true
 HELDflash = Clapeyron.tp_flash_impl(model,p,T,z, HELDTPFlash(add_random_guess = true, verbose = verbose))
 verbose = true
 GFEMflash = Clapeyron.tp_flash_impl(model,p,T,z, GFEMTPFlash(flashin = HELDflash, verbose = verbose))
