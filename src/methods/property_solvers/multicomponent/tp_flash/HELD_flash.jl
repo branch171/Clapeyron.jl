@@ -1004,6 +1004,10 @@ function HELD_impl(model,p,T,z₀,
     	np = 1
     	HELD_complete = false
     	xHELD = Vector{Float64}(undef,0)
+
+	#	beta_best = Vector{Float64}(undef,0)
+	#	fmins_best = Vector{Float64}(undef,0)
+    #	xmins_best = Vector{Vector{Float64}}(undef,0)
     	
     	for k = 1:max_HELD_iters
 
@@ -1147,6 +1151,10 @@ function HELD_impl(model,p,T,z₀,
 				end
 
     		end
+
+		#	if verbose == true
+		#		println("HELD Step 3 - IPₓᵥ solve xmins set $(xmins)")
+    	#	end
 		
 			fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol_clean, verbose)
 			
@@ -1158,6 +1166,7 @@ function HELD_impl(model,p,T,z₀,
 			
 			if verbose == true
         		println("HELD Step 3 - IPₓᵥ solve unique, $(length(fmins_unique)) unique solutions found")
+			#	println("HELD Step 3 - IPₓᵥ solve unique, xmins_unique set $(xmins_unique)")
     		end
     		
     		ℒ = Vector{Vector{Float64}}(undef,0)
@@ -1174,14 +1183,16 @@ function HELD_impl(model,p,T,z₀,
 				end
 				
 				# sometimes the are more than one solution that can be added
+				push!(ℒ,xmins_unique[iLBDⱽ])
 				for i = 1:length(fmins_unique)
-					if abs(fmins_unique[i] - fmins_unique[iLBDⱽ]) < tol
+					if i != iLBDⱽ && abs(fmins_unique[i] - fmins_unique[iLBDⱽ]) < tol
 						push!(ℒ,xmins_unique[i])
 					end
 				end
 				
 				if verbose == true
         			println("HELD Step 3 - ℒ set contains $(length(ℒ)) items")
+				#	println("HELD Step 3 - ℒ set $(ℒ)")
   				end
 				
 			end
@@ -1215,9 +1226,18 @@ function HELD_impl(model,p,T,z₀,
     					push!(xmins,xmin)
     				end
 				end
+
+			#	if verbose == true
+			#			println("HELD Step 3 - Global solution - xmins set $(xmins)")
+  			#	end
 				
 				fmins_unique, xmins_unique, stable = HELD_clean_local_solutions(UBDⱽ, x₀, fmins, xmins, tol_clean, verbose)
 
+			#	if verbose == true
+			#			println("HELD Step 3 - Global solution - xmins_unique set $(xmins_unique)")
+  			#	end
+
+				ℒ = Vector{Vector{Float64}}(undef,0)
 				if length(fmins_unique) > 0
 					
 					# find lowest minimum of returned set.
@@ -1231,14 +1251,16 @@ function HELD_impl(model,p,T,z₀,
 					end
 					
 					# sometimes the are more than one solution that can be added
+					push!(ℒ,xmins_unique[iLBDⱽ])
 					for i = 1:length(fmins_unique)
-						if abs(fmins_unique[i] - fmins_unique[iLBDⱽ]) < tol
+						if i != iLBDⱽ && abs(fmins_unique[i] - fmins_unique[iLBDⱽ]) < tol
 							push!(ℒ,xmins_unique[i])
 						end
 					end
 				
 					if verbose == true
         				println("HELD Step 3 - Global solution - ℒ set contains $(length(ℒ)) items")
+					#	println("HELD Step 3 - Global solution - ℒ set $(ℒ)")
   					end
   					
 				else
@@ -1251,6 +1273,7 @@ function HELD_impl(model,p,T,z₀,
         		if verbose == true
         			println("HELD Step 1 - Global solution failed, its wise to check this solution")
     			end
+				
     			if verbose == true
 					println("HELD Step 6 - Complete")
 					println("HELD Step 6 - Phase found 1")
@@ -1263,6 +1286,7 @@ function HELD_impl(model,p,T,z₀,
 					println("HELD Step 6 - Minimum Gibbs Energy = $(G₀)")
     			end
     			return  [1.0], [z₀], [v₀], G₀
+
     		end
 				
 			error = UBDⱽ - LBDⱽ 
@@ -1272,10 +1296,11 @@ function HELD_impl(model,p,T,z₀,
         		println("HELD Step 3 - UBDⱽ - LBDⱽ = $(error) and tol = $(HELD_tol)")
     		end
 			
+			betaerror = 1.0
+			
 			bphase = Vector{Float64}(undef,length(xmins_unique[1]))
 			beta = Vector{Float64}(undef,length(xmins_unique))
 			aphase = Matrix{Float64}(undef, length(xmins_unique[1]), length(xmins_unique))
-			betaerror = 1.0
 			if length(xmins_unique) > 1 
 				for ib = 1:length(xmins_unique)
 					sumx = 0.0
@@ -1295,14 +1320,14 @@ function HELD_impl(model,p,T,z₀,
 				end
 				betaerror = abs(1.0 - sumbeta)
 				if verbose == true
-        			println("HELD Step 3 - Test phase mole balance: error = $(betaerror) and tol =  $(sqrt(HELD_tol))")
-        			println("HELD Step 3 - Phases found: np = $(length(beta))")
-    			end
+					println("HELD Step 3 - Test phase mole balance: error = $(betaerror) and tol =  $(sqrt(HELD_tol))")
+					println("HELD Step 3 - Phases found: np = $(length(beta))")
+				end
 			end
 			
 			if verbose == true
-        		println("HELD Step 3 - Test overall convergence:")
-    		end
+				println("HELD Step 3 - Test overall convergence:")
+			end
 			
 			np = length(beta)
 			for ip = 1:np-1
@@ -1324,13 +1349,28 @@ function HELD_impl(model,p,T,z₀,
 			beta[np] = 1.0 - sumbeta
 
 			if error < sqrt(HELD_tol) && betaerror < sqrt(HELD_tol)
+
 				feasible = true
 				rr1_iter, rr1_error = RadfordRice_BetaOnly_Solver!(z₀,beta,xmins_unique,feasible,verbose)
-			#	rr2_iter, rr2_error = RadfordRice_SS_Solver!(model,p,T,z₀,vref,beta,xmins_unique,feasible,verbose)
+
+			#	fmins_best = deepcopy(fmins_unique)
+			#	xmins_best = deepcopy(xmins_unique)
+			#	beta_best  = deepcopy(beta)
+
 			#	if verbose == true
-			#		println("HELD Step 5 - RadfordRice_SS_Solver!: iterations taken = $(iter)")
-			#		println("HELD Step 5 - RadfordRice_SS_Solver!: error = $(error) - tol = $(tol)")
+			#		println("HELD Step 5 - fmins_best: $(fmins_best)")
+			#		println("HELD Step 5 - xmins_best: $(xmins_best)")
+			#		println("HELD Step 5 - beta_best: $(beta_best)")
 			#	end
+
+			#	if feasible
+			#		rr2_iter, rr2_error = RadfordRice_SS_Solver!(model,p,T,z₀,vref,beta,xmins_unique,feasible,verbose)
+			#		if verbose == true
+			#			println("HELD Step 5 - RadfordRice_SS_Solver!: iterations taken = $(iter)")
+			#			println("HELD Step 5 - RadfordRice_SS_Solver!: error = $(error) - tol = $(tol)")
+			#		end
+			#	end
+
 			else
 				feasible = false
 			end
@@ -1345,7 +1385,7 @@ function HELD_impl(model,p,T,z₀,
 				end
 			end
 
-			if error < HELD_tol && feasible
+			if (error < HELD_tol && feasible)
 		#	if error < HELD_tol && betaerror < sqrt(HELD_tol)
 		#	if error < HELD_tol
 
@@ -1357,7 +1397,7 @@ function HELD_impl(model,p,T,z₀,
 	   			# normalise the solution before we do the Gibbs minimisation step.
 	   			# its essential that xHELD moles balances and is a feasible solution
 
-			#	rr2_iter, rr2_error = RadfordRice_SS_Solver!(model,p,T,z₀,vref,beta,xmins_unique,verbose)
+		#		rr2_iter, rr2_error = RadfordRice_SS_Solver!(model,p,T,z₀,vref,beta,xmins_unique,feasible,verbose)
 	
 	   			phasemoles = Vector{Vector{Float64}}(undef,0)
 	   			for ic = 1:nc-1			
@@ -1420,7 +1460,8 @@ function HELD_impl(model,p,T,z₀,
     		end
 
 			use_only_lowest_min = false
-			if error > 0.001 && !use_only_lowest_min
+		#	if error > 0.001 && !use_only_lowest_min
+			if !use_only_lowest_min
 				# add latest minimums to ℳguess
 				for i = 1:length(fmins_unique)
 					xminsGi_unique = append!(deepcopy(xmins_unique[i]),Gi(xmins_unique[i]))
@@ -1437,9 +1478,9 @@ function HELD_impl(model,p,T,z₀,
 			# add minimums to ℳguess set
 			# remove previous minimums from ℳguess only if number found is less than or equal to previous
 			# this keeps the maximum number found in the set
-			if length(fmins_unique) <= n_unique_previous
-    			deleteat!(ℳguess, (length(ℳguess) - (n_unique_previous-1)):length(ℳguess))
-    		end
+		#	if length(fmins_unique) <= n_unique_previous
+    	#		deleteat!(ℳguess, (length(ℳguess) - (n_unique_previous-1)):length(ℳguess))
+    	#	end
     		# add latest minimums to ℳguess
     		for i = 1:length(fmins_unique)
 				xminsGi_unique = append!(deepcopy(xmins_unique[i]),Gi(xmins_unique[i]))
@@ -1518,6 +1559,10 @@ function HELD_impl(model,p,T,z₀,
 			UseGibbsMin = true
 			if UseGibbsMin
 				xsol,Gsol,iter,error,check = Solvers.trustregion_Dennis_Schnabel(Gibbs, Gibbs_g, Gibbs_h, projGibbs, cnstGibbs, xHELD, max_trust_region_iters, tol, false)
+				if check
+					xsol = xHELD
+					check = false
+				end
 				xsol = projGibbs(xsol)
 				Gsol = Gibbs(xsol)
 				Gibbs_accepted = !check
@@ -1537,7 +1582,17 @@ function HELD_impl(model,p,T,z₀,
 				end
 			else
 				check = false
+				feasible = true
+				rr2_iter, rr2_error = RadfordRice_SS_Solver!(model,p,T,z₀,vref,beta,xmins_unique,feasible,verbose)
+				for ip = 1:np-1
+    				push!(xHELD,beta[ip])
+    				for ic = 1:nc
+    					push!(xHELD,xmins_unique[ip][ic])
+    				end
+    			end
+    			push!(xHELD,xmins_unique[np][nc])
 				xsol = xHELD
+				xsol = projGibbs(xsol)
 				Gsol = Gibbs(xsol)
 				iter = rr2_iter
 				error = rr2_error
@@ -1911,12 +1966,12 @@ function RadfordRice_SS_Solver!(model,p,T,z₀,vref,β,xin,feasible,verbose)
 		push!(ρ,0.0)
 	end
 
-#	if verbose == true
-#		println("HELD RadfordRice_Solver β - $(β)")
-#		println("HELD RadfordRice_Solver np - $(np)")
-#		println("HELD RadfordRice_Solver nc - $(nc)")
-#		println("HELD RadfordRice_Solver x - $(x)")
-#	end
+	if verbose == true
+		println("HELD RadfordRice_Solver β - $(β)")
+		println("HELD RadfordRice_Solver np - $(np)")
+		println("HELD RadfordRice_Solver nc - $(nc)")
+		println("HELD RadfordRice_Solver x - $(x)")
+	end
 
 	β0 = zeros(np-1)
 	for ip = 1:np-1
@@ -2051,9 +2106,9 @@ function RadfordRice_SS_Solver!(model,p,T,z₀,vref,β,xin,feasible,verbose)
 			β0[1] -= Dβ[1]
 		end
 
-	#	if verbose == true
-	#		println("HELD RadfordRice_Solver β0 - $(β0)")
-	#	end
+		if verbose == true
+			println("HELD RadfordRice_Solver β0 - $(β0)")
+		end
 
 		for ip = 1:np-1
 			for ic = 1:nc
@@ -2073,13 +2128,15 @@ function RadfordRice_SS_Solver!(model,p,T,z₀,vref,β,xin,feasible,verbose)
 			x[np][ic] = z₀[ic]/(1.0 + sumβsK)
 		end
 
-	#	if verbose == true
-	#		println("HELD RadfordRice_Solver x - $(x)")
-	#	end
+		if verbose == true
+			println("HELD RadfordRice_Solver x - $(x)")
+		end
 
 	end
 
-	# println("HELD RadfordRice_SS_Solver! iter, error - $(iter), $(error)")
+	if verbose == true
+ 		println("HELD RadfordRice_SS_Solver! iter, error - $(iter), $(error)")
+	end
 
 	lb = 100.0*eps(Float64)
 	feasible = true
