@@ -2054,6 +2054,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
 
     ps_Plot = Vector{Float64}(undef,0)
     ms_Plot = Vector{Float64}(undef,0)
+    ms_kg_Plot = Vector{Float64}(undef,0)
 
     fv_Plot = Vector{Float64}(undef,0)
     fl_Plot = Vector{Float64}(undef,0)
@@ -2081,6 +2082,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
     push!(m1_Plot, holdups[1].moles*holdups[1].mw/1000)
     push!(m2_Plot, holdups[2].moles*holdups[2].mw/1000)
     push!(ms_Plot, holdups[3].moles*holdups[3].mw/1000)
+    push!(ms_kg_Plot, holdups[3].moles*holdups[3].mw)
 
     push!(fv_Plot, 0.0)
     push!(fl_Plot, 0.0)
