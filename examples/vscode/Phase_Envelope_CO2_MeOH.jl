@@ -1,10 +1,7 @@
 using Clapeyron, Plots
 
-#model = PR(["carbon dioxide","nitrogen"])
-#model = PCSAFT(["carbon dioxide","nitrogen"])
+model = sCPA(["carbon dioxide","methanol"])
 #model = SAFTVRMie(["carbon dioxide","nitrogen"])
-model = GERG2008(["carbon dioxide","nitrogen"])
-#model = EOS_CG(["carbon dioxide","nitrogen"])
 
 xCO2 = 0.9975
 x = [xCO2,1.0-xCO2]

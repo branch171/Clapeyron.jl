@@ -2055,9 +2055,11 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
     ps_Plot = Vector{Float64}(undef,0)
     ms_Plot = Vector{Float64}(undef,0)
     ms_kg_Plot = Vector{Float64}(undef,0)
+    MeOH_kg_Plot = Vector{Float64}(undef,0)
 
     fv_Plot = Vector{Float64}(undef,0)
     fl_Plot = Vector{Float64}(undef,0)
+    MeOH_Plot = Vector{Float64}(undef,0)
 
     Twallmin_out = Twall_initial - 273.15
 
@@ -2086,6 +2088,8 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
 
     push!(fv_Plot, 0.0)
     push!(fl_Plot, 0.0)
+    push!(MeOH_Plot, 0.0)
+    push!(MeOH_kg_Plot, 0.0)
 
     time = 0.0
     push!(time_Plot, time)
@@ -2532,7 +2536,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
             end
 
             # assume vapour removal true, liquid removal false
-            if holdups[1].p > 5.25e5
+            if holdups[1].p > 1.0e5
                 topflow = false
             else
                 topflow = true
@@ -2540,7 +2544,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
 
             # add in MeOH
             p_MeOH = 1.01325e5
-            T_MeOH = 15+273.15
+            T_MeOH = 47.5+273.15
                 
             # get enthalpy of inlet stream for mixing, don't need to know temperature at outlet. this would be the isenthalpic flash
             # but delta H is zero so just mix inlet enthalpy
@@ -2548,35 +2552,34 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
             βMeOH,mwMeOH,mwtMeOH,vMeOH,vtNMeOH,hMeOH,htNMeOH,sMeOH,stMeOH,xMeOH  = get_props(modelMeOH,flashMeOH)
 
             if holdups[1].p < 27.0e5 && holdups[1].p >= 5.25e5
-                flowin_MeOH = 0.125    
-            elseif holdups[1].p < 5.25e5 && holdups[1].p >= 2.0e5
-                flowin_MeOH = 0.750
+                flowin_vap_MeOH = 0.125
+                flowin_liq_MeOH = 0.125    
+            elseif holdups[1].p < 5.25e5
+                flowin_vap_MeOH = 0.125
+                flowin_liq_MeOH = 0.875
             else
-                flowin_MeOH = 0.0
+                flowin_vap_MeOH = 0.0
+                flowin_liq_MeOH = 0.0
             end
 
-            flowin_MeOH_mass = flowin_MeOH*mwtMeOH
+            flowin_MeOH_mass = (flowin_vap_MeOH + flowin_liq_MeOH)*mwtMeOH
 
-            println("MeOH Flow = $(flowin_MeOH) mol/s")
+            println("MeOH Flow = $(flowin_vap_MeOH + flowin_liq_MeOH) mol/s")
             println("MeOH Flow = $(flowin_MeOH_mass) kg/s")
 
             # only add MeOH if there is holdup there
             if holdups_last[1].moles > tiny_holdup
-                if holdups[1].p < 27.0e5 && holdups[1].p >= 5.25e5
-                    for ic = eachindex(zMeOH)
-                        Δcm[1][ic] += Δt*flowin_MeOH*zMeOH[ic]
-                    end
-                    Δmh[1] += Δt*flowin_MeOH*htNMeOH
+                for ic = eachindex(zMeOH)
+                    Δcm[1][ic] += Δt*flowin_vap_MeOH*zMeOH[ic]
                 end
+                Δmh[1] += Δt*flowin_vap_MeOH*htNMeOH
             end
 
              if holdups_last[2].moles > tiny_holdup
-                if holdups[2].p < 5.25e5
-                    for ic = eachindex(zMeOH)
-                        Δcm[2][ic] += Δt*flowin_MeOH*zMeOH[ic]
-                    end
-                    Δmh[2] += Δt*flowin_MeOH*htNMeOH
+                for ic = eachindex(zMeOH)
+                    Δcm[2][ic] += Δt*flowin_liq_MeOH*zMeOH[ic]
                 end
+                Δmh[2] += Δt*flowin_liq_MeOH*htNMeOH
             end
 
             # perform phase separation based on current holdups
@@ -3010,10 +3013,10 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
         #    println("Re = $(rho*u*d/mu)")
             NuLam = 3.657 + 0.065*Re*Pr*d/L/(1.0 + 0.04*(Re*Pr*d/L)^(2/3))
             NuTurb = 0.0
-            if Re > 4000.0
+            if Re > 1000.0
                 f = 1.82 * log10(Re) - 1.64
                 f = 1.0/f/f
-                NuTurb = f/8.0*Re*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))
+                NuTurb = f/8.0*(Re - 1000.0)*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))*(1.0 + (d/L)^(2/3))
             end
             beta = 2.0/(Tw + T)
             Gr = d*d*d*g*rho*rho*beta*abs(Tw - T)/mu/mu
@@ -3064,10 +3067,10 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
         #    println("Re = $(rho*u*d/mu)")
             NuLam = 3.657 + 0.065*Re*Pr*d/L/(1.0 + 0.04*(Re*Pr*d/L)^(2/3))
             NuTurb = 0.0
-            if Re > 4000.0
+            if Re > 1000.0
                 f = 1.82*log10(Re) - 1.64
                 f = 1.0/f/f
-                NuTurb = f/8.0*Re*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))
+                NuTurb = f/8.0*(Re - 1000.0)*Pr/(1.0 + 12.7*sqrt(f/8.0)*(Pr^(2/3) - 1.0))*(1.0 + (d/L)^(2/3))
             end
             deltaT0 = 20000.0 / 3500.0
             deltaT = Tw - T
@@ -3430,6 +3433,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
 
         push!(fv_Plot, fv_plot)
         push!(fl_Plot, fl_plot)
+        push!(MeOH_Plot, flowin_MeOH_mass)
 
         push!(Twallmin_Plot, Twallmin)
         push!(Twallmin_av_Plot, Twallmin_av)
@@ -3449,6 +3453,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
         push!(m2_Plot, holdups[2].moles*holdups[2].mw/1000)
         push!(ms_Plot, holdups[3].moles*holdups[3].mw/1000)
         push!(ms_kg_Plot, holdups[3].moles*holdups[3].mw)
+        push!(MeOH_kg_Plot,massMeOH_required)
 
         println("solid mass = $(holdups[3].moles*holdups[3].mw) kg")
 
@@ -3563,6 +3568,21 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
     display(p6)
     savefig(p6,"~/julia/dev/Clapeyron.jl/fig6.png")
 
+    p7 = plot(
+    label=["MeOH"],
+    [time_Plot], 
+    [MeOH_Plot],
+    xlabel = "Time [hours]",
+    ylabel = "Flow [kg/s]",
+    left_margin = 10Plots.mm,
+    bottom_margin = 10Plots.mm,
+    xtickfontsize=18,ytickfontsize=18,xguidefontsize=18,yguidefontsize=18,legendfontsize=18,
+    grid = :on,linewidth=3,
+    size=(1600,1200))
+
+    display(p7)
+    savefig(p7,"~/julia/dev/Clapeyron.jl/fig7.png")
+
     # write data pout to file
 
     io=open("tank01_upper_27bara_5percent.dat","w") do io
@@ -3572,6 +3592,10 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
             m1 = m1_Plot[i]
             m2 = m2_Plot[i]
             ms = ms_Plot[i]
+            MeOH_kg = MeOH_kg_Plot[i]
+            MeOH = MeOH_Plot[i]
+            fv = fv_Plot[i]
+            fl = fl_Plot[i]
             T1 = T1_Plot[i]
             T2 = T2_Plot[i]
             Tw1 = Twallvap_Plot[i]
@@ -3580,7 +3604,7 @@ function BlowDown(model, ps, Ts, zs, tank_volume, tank_radius, tank_length, leve
             Twav = Twallmin_av_Plot[i]
             Twnoz = Twallnoz_Plot[i]
             TMMDT = Twall_MMDT_Plot[i]
-            println(io, "$(t),$(p),$(m1),$(m2),$(ms),$(T1),$(T2),$(Tw1),$(Tw2),$(Twm),$(Twav),$(Twnoz),$(TMMDT)")
+            println(io, "$(t),$(p),$(m1),$(m2),$(ms),$(MeOH_kg),$(fv),$(fl),$(MeOH),$(T1),$(T2),$(Tw1),$(Tw2),$(Twm),$(Twav),$(Twnoz),$(TMMDT)")
         end
     end
 
@@ -3588,7 +3612,7 @@ end
 
 delta_P = 0.125e5
 
-pe = 1.0e5
+pe = 1.125e5
 #pe = 26.75e5
 
 nstep = Int((ps - pe)/delta_P)
